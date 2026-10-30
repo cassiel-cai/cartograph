@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale } from "@/components/locale-provider";
+import { messagesFor } from "@/lib/messages";
 import {
   applyTheme,
   readThemePreference,
@@ -9,12 +11,6 @@ import {
   type ThemePreference,
 } from "@/lib/theme";
 import { useSyncExternalStore } from "react";
-
-const LABELS: Record<ThemePreference, string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
-};
 
 function subscribe(onStoreChange: () => void) {
   const onChange = () => {
@@ -31,6 +27,12 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function ThemeControl() {
+  const copy = messagesFor(useLocale());
+  const labels: Record<ThemePreference, string> = {
+    system: copy.themeSystem,
+    light: copy.themeLight,
+    dark: copy.themeDark,
+  };
   const preference = useSyncExternalStore(
     subscribe,
     readThemePreference,
@@ -46,7 +48,7 @@ export function ThemeControl() {
   return (
     <div
       role="radiogroup"
-      aria-label="Theme"
+      aria-label={copy.theme}
       className="flex border border-border"
     >
       {THEME_VALUES.map((value) => {
@@ -64,7 +66,7 @@ export function ThemeControl() {
                 : "bg-surface text-muted hover:text-foreground"
             }`}
           >
-            {LABELS[value]}
+            {labels[value]}
           </button>
         );
       })}

@@ -1,15 +1,23 @@
-import type { Analysis } from "@/lib/analyses";
+"use client";
+
+import { useLocale } from "@/components/locale-provider";
 import { TeamName } from "@/components/team-name";
+import type { Analysis } from "@/lib/analyses";
+import { formatAgo } from "@/lib/ago";
+import { messagesFor } from "@/lib/messages";
 
 const STATE_ORDER = ["parsing", "queued", "complete", "failed"] as const;
 
 export function AnalysisList({
   analyses,
+  now,
   teamFallback,
 }: {
   analyses: Analysis[];
+  now: number;
   teamFallback: string;
 }) {
+  const copy = messagesFor(useLocale());
   const summary = summarize(analyses);
 
   return (
@@ -20,9 +28,7 @@ export function AnalysisList({
             <TeamName fallback={teamFallback} />
           </h1>
           <p className="text-[13px] text-muted">
-            {analyses.length === 1
-              ? "1 analysis"
-              : `${analyses.length} analyses`}
+            {copy.analysisCount(analyses.length)}
           </p>
         </div>
         {summary.length > 0 ? (
@@ -31,7 +37,7 @@ export function AnalysisList({
               <li key={item.state} className="flex items-center gap-1.5">
                 <StateIcon state={item.state} />
                 <span className="tabular-nums">
-                  {item.count} {item.state}
+                  {item.count} {copy.stateLabel(item.state)}
                 </span>
               </li>
             ))}
@@ -40,18 +46,18 @@ export function AnalysisList({
       </div>
       {analyses.length === 0 ? (
         <p className="border-t border-border px-4 py-3 text-[13px] text-muted">
-          This team has not run an analysis.
+          {copy.emptyAnalyses}
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-180 border-collapse text-left">
             <thead>
               <tr className="border-y border-border text-[12px] text-muted">
-                <th className="px-4 py-2 font-normal">Repository</th>
-                <th className="w-36 px-3 py-2 font-normal">State</th>
-                <th className="w-28 px-3 py-2 font-normal">Commit</th>
-                <th className="w-28 px-3 py-2 font-normal">Started</th>
-                <th className="w-28 px-3 py-2 font-normal">Finished</th>
+                <th className="px-4 py-2 font-normal">{copy.repository}</th>
+                <th className="w-36 px-3 py-2 font-normal">{copy.state}</th>
+                <th className="w-28 px-3 py-2 font-normal">{copy.commit}</th>
+                <th className="w-28 px-3 py-2 font-normal">{copy.started}</th>
+                <th className="w-28 px-3 py-2 font-normal">{copy.finished}</th>
               </tr>
             </thead>
             <tbody>
@@ -70,17 +76,17 @@ export function AnalysisList({
                   <td className="px-3 py-2.5 align-top">
                     <span className="flex items-center gap-1.5 text-[13px]">
                       <StateIcon state={analysis.state} />
-                      {analysis.state}
+                      {copy.stateLabel(analysis.state)}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 align-top font-mono text-[13px]">
                     <Cell value={analysis.commitSha} />
                   </td>
                   <td className="px-3 py-2.5 align-top text-[13px]">
-                    <Cell value={analysis.startedLabel} />
+                    <Ago iso={analysis.startedAt} now={now} />
                   </td>
                   <td className="px-3 py-2.5 align-top text-[13px]">
-                    <Cell value={analysis.finishedLabel} />
+                    <Ago iso={analysis.finishedAt} now={now} />
                   </td>
                 </tr>
               ))}
@@ -98,6 +104,15 @@ function Cell({ value }: { value: string | null }) {
   }
 
   return value;
+}
+
+function Ago({ iso, now }: { iso: string | null; now: number }) {
+  const locale = useLocale();
+  if (!iso) {
+    return <span className="text-muted">—</span>;
+  }
+
+  return formatAgo(iso, now, locale);
 }
 
 function summarize(analyses: Analysis[]) {

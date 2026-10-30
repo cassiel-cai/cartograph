@@ -6,15 +6,20 @@ export type Analysis = {
   repositoryUrl: string;
   state: string;
   commitSha: string | null;
-  startedLabel: string | null;
-  finishedLabel: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
   detail: string | null;
+};
+
+export type AnalysisListResult = {
+  analyses: Analysis[];
+  now: number;
 };
 
 // A list read names its columns and stops. Nothing pages yet.
 const LIST_LIMIT = 100;
 
-export async function listAnalyses(): Promise<Analysis[]> {
+export async function listAnalyses(): Promise<AnalysisListResult> {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("analyses")
@@ -28,13 +33,14 @@ export async function listAnalyses(): Promise<Analysis[]> {
     throw new Error(`Could not read analyses: ${error.message}`);
   }
 
-  // Relative labels are the current time. io() keeps that read out of the
-  // prerender, which rejects Date.now().
+  // The client formats relative times from this instant. Capturing it here,
+  // behind io(), keeps Date.now() out of the prerender and gives both renders
+  // the same value.
   await io();
-  return readAnalyses(data, Date.now());
+  return { analyses: readAnalyses(data), now: Date.now() };
 }
 
-function readAnalyses(rows: unknown, now: number): Analysis[] {
+function readAnalyses(rows: unknown): Analysis[] {
   if (!Array.isArray(rows)) {
     throw new Error("Analyses query did not return a list.");
   }
@@ -45,8 +51,8 @@ function readAnalyses(rows: unknown, now: number): Analysis[] {
     }
 
     const id = readId(row.id);
-    const startedAt = readOptionalText(row.started_at, index, "started_at");
-    const finishedAt = readOptionalText(row.finished_at, index, "finished_at");
+    const startedAt = readOptionalTime(row.started_at, index, "started_at");
+    const finishedAt = readOptionalTime(row.finished_at, index, "finished_at");
     if (
       id === null ||
       typeof row.repository_url !== "string" ||
@@ -62,8 +68,8 @@ function readAnalyses(rows: unknown, now: number): Analysis[] {
       repositoryUrl: row.repository_url,
       state: row.state,
       commitSha: readOptionalText(row.commit_sha, index, "commit_sha"),
-      startedLabel: startedAt ? formatAgo(startedAt, now) : null,
-      finishedLabel: finishedAt ? formatAgo(finishedAt, now) : null,
+      startedAt,
+      finishedAt,
       detail: readOptionalText(row.detail, index, "detail"),
     };
   });
@@ -85,6 +91,19 @@ function readId(value: unknown): number | null {
   return null;
 }
 
+function readOptionalTime(
+  value: unknown,
+  index: number,
+  column: string,
+): string | null {
+  const text = readOptionalText(value, index, column);
+  if (text != null && Number.isNaN(Date.parse(text))) {
+    throw new Error(`Analysis row ${index} has an unreadable ${column}.`);
+  }
+
+  return text;
+}
+
 function readOptionalText(
   value: unknown,
   index: number,
@@ -99,27 +118,4 @@ function readOptionalText(
   }
 
   throw new Error(`Analysis row ${index} has a non-text ${column}.`);
-}
-
-// Hours cover the first two days, so a row from yesterday still reads as
-// "24h ago" rather than flipping to days at the first midnight.
-export function formatAgo(iso: string, now: number): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) {
-    throw new Error(`Could not read a time: ${iso}`);
-  }
-
-  const elapsed = Math.max(0, now - then);
-  const minutes = Math.floor(elapsed / 60_000);
-  if (minutes < 60) {
-    return `${Math.max(1, minutes)}m ago`;
-  }
-
-  const hours = Math.floor(elapsed / 3_600_000);
-  if (hours < 48) {
-    return `${hours}h ago`;
-  }
-
-  const days = Math.floor(elapsed / 86_400_000);
-  return `${days}d ago`;
 }

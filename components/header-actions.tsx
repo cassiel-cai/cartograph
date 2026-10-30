@@ -1,6 +1,9 @@
 "use client";
 
+import { LocaleControl } from "@/components/locale-control";
+import { useLocale } from "@/components/locale-provider";
 import { ThemeControl } from "@/components/theme-control";
+import { messagesFor } from "@/lib/messages";
 import { UserButton } from "@clerk/nextjs";
 
 const appearance = {
@@ -20,25 +23,28 @@ export function HeaderActions({
 }: {
   organization: { id: string; slug: string | null };
 }) {
+  const copy = messagesFor(useLocale());
+
   return (
     <div className="ml-auto flex items-center gap-2">
+      <LocaleControl />
       <ThemeControl />
       <UserButton appearance={appearance}>
         <UserButton.UserProfilePage
-          label="Organization"
+          label={copy.organization}
           url="organization"
           labelIcon={<OrganizationIcon />}
         >
           <dl className="flex flex-col gap-4 text-[13px]">
             <div>
-              <dt className="text-[11px] opacity-60">Organization</dt>
+              <dt className="text-[11px] opacity-60">{copy.organization}</dt>
               <dd className="mt-1 font-mono text-[12px] break-all">
                 {organization.slug ?? organization.id}
               </dd>
             </div>
             {organization.slug ? (
               <div>
-                <dt className="text-[11px] opacity-60">Organization id</dt>
+                <dt className="text-[11px] opacity-60">{copy.organizationId}</dt>
                 <dd className="mt-1 font-mono text-[12px] break-all">
                   {organization.id}
                 </dd>
