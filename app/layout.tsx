@@ -1,3 +1,4 @@
+import { OrgSwitchListener } from "@/components/org-switch-listener";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             },
           }}
         >
+          <OrgSwitchListener />
           {children}
         </ClerkProvider>
       </body>

@@ -1,11 +1,19 @@
+import { AnalysisList } from "@/components/analysis-list";
+import { AnalysesLoading, DashboardFrame } from "@/components/dashboard-frame";
 import { Shell } from "@/components/shell";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { listAnalyses } from "@/lib/analyses";
 import { auth } from "@clerk/nextjs/server";
 import { Suspense } from "react";
 
 export default function Home() {
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-background" />}>
+    <Suspense
+      fallback={
+        <div className="min-h-dvh bg-background">
+          <AnalysesLoading />
+        </div>
+      }
+    >
       <Workspace />
     </Suspense>
   );
@@ -13,9 +21,6 @@ export default function Home() {
 
 async function Workspace() {
   const { orgId, orgSlug } = await auth.protect();
-  // Bind the Clerk session token on this request. Nothing queries yet.
-  const supabase = createServerSupabaseClient();
-  void supabase;
 
   if (!orgId) {
     throw new Error(
@@ -25,14 +30,16 @@ async function Workspace() {
 
   return (
     <Shell organization={{ id: orgId, slug: orgSlug ?? null }}>
-      <div className="flex h-full min-h-0 flex-col">
-        <h2 className="border-b border-border px-2 py-1 text-[11px] text-muted">
-          Map
-        </h2>
-        <p className="px-2 py-2 text-[11px] text-muted">
-          Paste a public repository after this workspace is wired.
-        </p>
-      </div>
+      <DashboardFrame serverOrgId={orgId}>
+        <Suspense fallback={<AnalysesLoading />}>
+          <AnalysisSection teamFallback={orgSlug ?? orgId} />
+        </Suspense>
+      </DashboardFrame>
     </Shell>
   );
+}
+
+async function AnalysisSection({ teamFallback }: { teamFallback: string }) {
+  const analyses = await listAnalyses();
+  return <AnalysisList analyses={analyses} teamFallback={teamFallback} />;
 }
