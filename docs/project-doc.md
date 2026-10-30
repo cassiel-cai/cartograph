@@ -1,127 +1,233 @@
 # Cartograph
 
-本项目的产品决策在开发前即已完整梳理，每一项都附带详细的理由。理由比决定本身更重要——很多实际分叉场景未在文档列出，唯有理解背后的思路，才能面对变化自如决策。
+The product decisions behind this build, written before it starts, with the reasoning attached. The reasoning matters more than the decision — you'll hit forks this doesn't cover, and you'll need to know which way the thinking was leaning.
 
-构建之前只需查阅相关部分，无需一次性通读，更不推荐直接复制到对话窗口使用。
+Read the part you need before you build something. Don't read it all at once, and don't paste it into a prompt.
 
-## 产品定义
+## What it is
 
-用户通过 GitHub 登录，粘贴一个公开的 TypeScript 或 JavaScript 仓库地址，即可获得其结构地图。文件夹以盒状展现，依赖关系以线条连接。可展开文件夹查看内部文件，选择任一文件可显示其导入内容、被谁引用、若变更会影响到的上下两级文件。支持请求文件解释，将基于该文件及其实邻生成简明分析。
+Sign in with GitHub, paste a public TypeScript or JavaScript repository URL, and get a map of it. Folders as boxes, imports as lines between them. Open a folder into its files. Select a file and see what it imports, what imports it, and what
+breaks two levels out if it changes. Ask for an explanation and get a paragraph
+written from that file and its real neighbours.
 
-同时有一个交互面板，可向仓库提问，并实时展示查证过程与答案。
+Then a panel where you can ask the repository a question and watch it look the
+answer up.
 
-## 问题陈述
+## The problem
 
-现代项目常常包含团队中无人读过的代码。或由智能体生成、或仅作过基本测试后就上线，这成为合理但不可避免的工作方式——随之而来的，是“不经人手”的结构堆积：多层 re-export、几十文件依赖的 util、数月无人引用的模块。
+Codebases now routinely contain code nobody on the team has read. An agent wrote
+it, someone confirmed it worked, it shipped. That is a reasonable way to work and
+it is not going to stop — but it accumulates structure nobody chose. Files that
+import through three layers of re-exports. A utility forty files depend on. A
+module nothing has referenced in months.
 
-核心问答都是结构性问题：这个文件是什么、谁依赖它、改了谁会坏。现有路径是逐文件分析并用工作记忆维护依赖，30 文件后此法就会失效，百级以上根本没人尝试。
+The questions that follow are structural. What is this file, what depends on it,
+what breaks if it changes. Answering them today means reading imports one file at
+a time and holding the results in working memory, which stops working at around
+thirty files and stops being attempted at all somewhere past a hundred.
 
-## 目标用户
+## Who it's for
 
-针对开发者打开自己未亲自编写的代码库——尤其是曾与智能体反复协作、自己都难以全局掌控的代码基。
+A developer opening a codebase they didn't write — most often one they built
+themselves with an agent, across many sessions, and can no longer hold in their
+head.
 
-阅读代码本身不难，难在无法感知全局结构。
+They can read code fine. What they can't see is its shape.
 
-而且，这已不再是某个人的困扰。一个四人团队各自以此方式交付，团队继任成员将继承四倍的“未读代码”。因此，结构分析应归属于团队组织，而非单个分析者。仓库一经分析，全员共享结构起点。
+And increasingly that isn't one person's problem. A team of four all shipping
+this way inherits four sets of code nobody read, and the person who joins next
+inherits all of it at once. So an analysis belongs to an organization rather
+than to whoever happened to run it. A repository is mapped once and everyone
+after that starts from the map.
 
-本描述也是后续所有功能需求的衡量基准。遇到“质量分”、“评分面板”等诱人特性时，需反问目标用户是否真正需要。一般来说，他们只关心“此文件的被依赖关系”。
+This description is the test every feature gets measured against. When something
+tempting comes up — a quality score, a rating, a review panel — the question is
+whether the person described above wants it. Usually they don't. They want to
+know what depends on this file.
 
-## 以往失败原因
+## Why this hasn't stuck before
 
-代码可视化并非新概念，但执行效果屡次不佳。CodeSee 获得融资仍未存续，Sourcetrail 桌面工具运营数年终被归档。本项目必须正视过往失败，不可视若无睹。
+Codebase visualisation is not a new idea and the track record is bad. CodeSee
+built close to this with real funding behind it and is gone. Sourcetrail ran for
+years as a desktop tool and was archived. Any plan here has to account for that
+rather than assume it away.
 
-最可能的原因在于：这些产品提供的是“用户本可手绘的地图”，属锦上添花，因而容易被淘汰。如今，代码中存在大量“自己都没读过的部分”，要求结构可在特定场合作为急需工具使用，而非附加品。
+The most likely explanation: both were selling a map of a codebase the user had
+already read. A map you could have drawn yourself is a nice-to-have, and
+nice-to-haves lose. What changed is that people now ship code they have never
+read, which turns the same artifact into something needed on a specific
+afternoon for a specific reason.
 
-当前 AI 工具大多走向相反路线——把整个仓库交给模型描述结构。这种方式上线快，因此同类众多，但本产品有意摒弃此法，理由详见下文。
+The current generation of AI tools mostly work the other way round — hand the
+repository to a model and let it describe the structure. That is much faster to
+build, which is why there are many of them, and it is the approach this product
+is deliberately not taking. The next section is why.
 
-这就是本项目的核心赌注，必须明述。
+That's the bet. It is a bet, and it should be stated as one.
 
-## 核心准则
+## The rule everything rests on
 
-**每一个节点、每一条边都必须从真实解析代码中得出。**
+**Every box and every line comes from really parsing the code.**
 
-AI 仅限于解释与标注，从不决策文件间关联，也不会在可由算法处理的层面进行结构推断。
+The AI may explain and label. It may never decide that two files are connected,
+and it may never walk the graph when arithmetic can do it instead.
 
-原因非常直接：依赖图只对九成准确比全无还要糟，因为无法判别出错的十分之一。一旦允许模型“猜测边”，所有结构都变成了猜测，结果只剩下“好看的图”。
+The reason, bluntly: a dependency graph that is ninety percent right is worse
+than no graph, because there's no way to tell which ten percent is wrong. The
+moment a model is allowed to guess at an edge, every edge becomes a maybe, and
+the product is a nice-looking picture.
 
-打破该原则的压力主要来自两个方向：一是“AI 代码分析”，使模型越权结构判断；二是“代码工具”逐步异化为“代码评审工具”，两者均坚决拒绝。
+Pressure to break this will come from two directions. "AI code analysis" pulls
+toward letting the model reason about structure. Anything calling itself a code
+tool drifts toward becoming a code reviewer. Both are refused.
 
-## 功能范围
+## Scope
 
-- 支持 GitHub、Google 或邮箱登录，仅做身份验证，无仓库权限，不存储令牌，仅限公开仓库。
-- 组织机制：每次分析归属一个组织，成员按邀请加入，权限由归属组织决定。仅设定默认角色。
-- 严格解析每个文件——包括 imports、re-exports、动态导入，以及 `require()`（仍有大量现网代码依赖）。
-- 框架知识以插件方式扩展，Next.js 等路由特性不可渗透至解析核心。
-- 精确统计每个文件的入度/出度。
-- 构建地图：文件夹折叠、可展开、文件选中高亮、详情面板。
-- 爆炸半径与依赖链完全基于边列表算术推导。
-- 文件解释支持不可关闭缓存。
-- 对于约定无法识别的文件，须支持人工标注。
-- 覆盖率报告——统计已解析与未解析部分及其理由。
-- 实时展示解析进度，保障大仓库解析期间用户可获进展感知。
-- 聊天面板由事实查证驱动的 agent 实时提供答案，不使用记忆性检索。
-- 检查 AI 结果中是否出现不存在的文件。
+- Sign-in with GitHub, Google or email, for identity only. No repo scope, no
+  token storage, public repositories only.
+- Organizations. Every analysis belongs to one, people are invited into one, and
+  what you can see follows from which one you're in. Default roles only.
+- Parsing every file — imports, re-exports and dynamic imports become edges.
+  `require()` as well, because a large amount of real code still uses it.
+- A pluggable place for framework knowledge, so knowing what a Next.js route
+  looks like never leaks into the parser itself.
+- Fan-in and fan-out per file.
+- The map: folders folding into boxes, expanding into files, selection,
+  highlighting, and a detail panel.
+- Blast radius and dependency chain, as arithmetic over the edge list.
+- Explaining a file, with a cache that isn't optional.
+- Labelling files that convention couldn't identify.
+- Coverage reporting — how much of the repository was parsed, and why the rest
+  wasn't.
+- Live progress during parsing, because parsing a real repository is not
+  instant.
+- A chat panel answered by an agent that looks facts up rather than recalling
+  them.
+- A check on whether the AI ever names a file that doesn't exist.
 
-## 明确不支持及原因
+## Out of scope, and why
 
-以下每一项模型都会建议，但产品故意拒绝，理由同样重要：
+Each of these is something a model will propose, because each of them sounds
+like an improvement. The reason matters more than the refusal.
 
-- **分数、打分、严重等级、发现若干问题**——本产品聚焦于代码库解释，不做代码评审。引入分数后用户只会纠结分数，忽视结构图本身。
-- **允许 agent 自动遍历依赖图**——应仅指定起点与方向，真正遍历应交由纯算法完成，防止模型虚构结构。
-- **私有仓库支持**——涉及令牌存储，不计入第一版本。
-- **近似路由**——若无法从语法准确恢复路径与方法，则直接不显示。错误路由等同于依赖虚构，不能容错。
-- **队列、容器、worker 支持**——仅支持单一可部署应用。大仓库本就无法在一个请求内完成分析，应直接声明为限制，而不是重构架构规避。
-- **TS/JS 之外的语言**——难度不是硬伤，关键在于“真正把单一语言做到极致”才是产品核心。
+- **Scores, grades, severity badges, "three issues found".** This product
+  explains a codebase; it does not review one. Once there's a number, people
+  argue with the number instead of reading the map.
+- **Letting the agent traverse the graph itself.** It picks a starting point and
+  a direction; the same arithmetic that draws the canvas does the walk. If the
+  model does the walking, invented structure comes straight back in.
+- **Private repositories.** Requires a token that would then have to be stored.
+  Not in v1.
+- **Approximate routes.** If a route's method and full path can't both be
+  recovered from the syntax, show nothing. A wrong route is the same failure as
+  an invented edge.
+- **Queues, containers, workers.** One deployable application. If a repository
+  is too large to parse in a request, that is a limit to state honestly, not an
+  architecture to build around.
+- **Languages beyond TypeScript and JavaScript.** Not because it's hard, but
+  because getting one language genuinely right is the entire proposition.
 
-## 实现方式
+## How it works
 
-此处不定义任何文件夹命名，你可自行组织结构。核心是以下约束：
+No folder names here — the structure is yours to choose. These are constraints
+on behaviour.
 
-**解析器完全独立。** 只接收目录路径，直接返回文件、依赖边及覆盖率报告。不知 Web 框架与数据库存在，须能在纯脚本环境下独立运行。如需依赖任何运行环境，表示架构分层存在问题。
+**The parser is standalone.** It takes a directory path and returns files, edges
+and a coverage report. It does not know the web framework exists, does not know
+the database exists, and must run from a plain script with nothing else running.
+If it can't run standalone, the layering is wrong.
 
-**框架知识应通过适配器接入而非分支。** 识别特定路径的页面属于（如 Next.js）框架知识，需成为独立适配器。若解析代码出现 `if (framework === ...)`，说明接口设计已失效。
+**Framework knowledge is an adapter, not a branch.** Knowing that a file in a
+particular position is a page is Next.js knowledge and belongs in an adapter. An
+`if (framework === ...)` inside parsing code means the interface built to prevent
+exactly that has failed.
 
-**依赖图所有计算均为纯函数**，输入文件和边列表即能完成。过程中不得包含数据获取，也无需模拟依赖即可测试。
+**Graph calculations are pure functions** over a list of files and a list of
+edges. No data fetching inside them, nothing to mock in order to check them.
 
-**身份仅为一个 token，且 token 内嵌组织信息。** 登录与团队管理使用 Clerk，后续所有权限判断仅读 token 的 organization 字段。绝无任何应用在运行时向身份服务发起请求。
+**Identity is a token, and the token carries the organization.** Sign-in and
+teams come from Clerk. Everything after that decides what someone may see by
+reading the organization claim off that token. Nothing in the application asks
+the identity provider a question at runtime.
 
-**数据库基于 Supabase 的 Postgres，访问权限由策略控制，** 不依赖业务实现安全标记。行归属组织，查询策略从 token 读组织字段，这就是全部授权逻辑。重点是：换组织登录时，不显示上一个组织的数据，而是根本查不到。
+**The database is Postgres on Supabase**, and access to it is a policy rather
+than a check the application remembers to perform. Rows belong to an
+organization, the policy reads the organization off the token, and that is the
+whole authorization layer. The distinction matters: signing in from a different
+organization should show the first one's rows are not hidden by the interface
+but absent from the query.
 
-**行级安全默认开启，非按表配置。** 迁移由 agent 生成，安全策略的两个极端并不对称：如表已开安全但未设策略，返回空数据，很容易发现；如忘记开安全却有数据，全量暴露且无迹可寻，后者必须彻底杜绝。
+**Row-level security is on by default, not per table.** An agent is writing
+these migrations, and the two failure modes are not symmetrical. A table with
+security enabled and no policy yet returns nothing, which is visible. A table
+where someone forgot to enable it returns everything, silently. The second one
+must be impossible rather than unlikely.
 
-**所有 AI 请求都需完整追踪与缓存**，缓存命中只在 trace 内读取，不调用模型，由此缓存的有效性可审计，而非假定。
+**Every AI call is traced and cached**, with the cache read inside the traced
+function, so a cache hit appears as a recorded run containing no model call.
+That's what makes the cache verifiable rather than assumed.
 
-## 界面设计
+## The interface
 
-本质是一款高密度开发者工具，而非信息看板。字号小、间距紧凑、凡涉及文件路径一律等宽字体。典型用户在一次操作中需扫读大量文件名，界面布局应顺应需求而非形式主义。
+A dense developer tool, not a dashboard. Small type, tight spacing, monospace for
+anything that is a file path. Someone using this is scanning a lot of names at
+once, and the layout should assume that rather than fighting it.
 
-**色彩只承担实际语义，否则不用。** 只有两类信息可用色：依赖流向（依赖与被依赖为不同色，突出结构主线）；文件类别（仅用少数颜色区分主要类型，余下均为灰度）。除高亮与类别外，界面基色、边框、正文均为灰色调。
+**Colour carries meaning or it isn't there.** Two things earn colour. Direction:
+what flows _into_ a file and what flows _out_ of it are different colours,
+because that distinction is the entire reason to look at an edge. And kind: a
+file gets a colour for what sort of thing it is, with enough hues to separate a
+handful of categories and no more. Everything else — surfaces, borders, body
+text — is greyscale.
 
-**配色原则明确。** 主色蓝（高亮、交互元素）、入度绿、出度橙，浅色模式下背景近白、深色模式下背景近黑。其余色彩皆从此派生，强调协调一致，不为每处都单独定调。
+**The palette starts at four decisions.** One blue as the accent, for selection
+and anything interactive. Green for incoming, amber for outgoing. Surfaces near
+white in light mode, near black in dark. Everything else derives from those —
+pick sensible values, keep them consistent, and don't ask about each one.
 
-**深浅模式用户优先。** 支持跟随系统、强制浅色、强制深色三种方案，选择会持久化。两套配色均为正向设计，非简单反转。
+**Dark and light, and the user's choice wins.** Three states: follow the system,
+force light, force dark. The choice survives a reload. Both palettes are real
+palettes rather than one of them inverted.
 
-**界面无自动画动。** 仅因用户交互（点击）触发动画，绝不做漂浮、脉冲等扰动。
+**Nothing moves on its own.** Motion happens because something was clicked. No
+ambient animation, no pulsing, no drifting graph.
 
-**所有可由依赖图计算出的信息均即时响应。** 若结果可由浏览器已有数据直接算出，必须秒出且无加载动画，无网络请求。过度加载动画会破坏用户对高效路径的信任，这是必须避免的。
+**Anything derivable from the edge list is instant.** If an answer is arithmetic
+over data the browser already holds, it appears immediately — no spinner, no
+network request. Putting a spinner in front of a calculation teaches people to
+distrust the fast paths, which are most of them.
 
-**核心界面初期一锤定音。** 早期决定好各面板布局与用途，后续仅可增补内容，不得大规模重排。具体细节以详细版本计划为准。
+**The shell gets built once.** Where the panels sit, and what each one is for, is
+settled in an early phase. Later phases add to those panels; they don't rearrange
+them. Specific placement lives in the phase specs.
 
-## 易犯错误预警
+## Where this is likely to go wrong
 
-**文件夹折叠规则难把控。** 大仓库文件必须可收敛为易读结构，阈值需精准设定，多半会走过弯路后才会定型。
+**Folding folders into readable boxes.** A large repository has to collapse into
+something legible, and the threshold has to be solved for rather than guessed.
+Expect at least one wrong answer here before a right one.
 
-**导入路径解析挑战极大。** 路径别名、index 文件、re-export。如构建在 barrel 文件上的仓库未能解析，则会丢掉大部分依赖边，还把错图画得“干净无比”。此处需要宁愿多报错，也不能做隐性掩盖。
+**Import resolution.** Path aliases, index files, re-exports. The risk isn't
+failure — it's _silent_ failure. A repository built on barrel files loses most of
+its edges and still renders a clean, confident, wrong picture. This is the one
+place loud reporting wins over a tidy interface.
 
-**AI 输出如何量化评估。** 仅靠人工随机抽查不可接受，必须有机制将输出质量量化为具体指标，测量方法目前并未定型，这是最大不确定点。
+**Measuring whether the AI output is any good.** Reading a few outputs and
+judging them fine is not measurement. The requirement is that answer quality
+becomes a number; the method for producing that number is genuinely open at the
+time of writing, and it is the least settled part of this plan.
 
-## 发布标准
+## What has to be true before this ships
 
-不是“看起来对了”就能上线，必须满足以下严格条件：
+Not "it looks right". Specifics:
 
-- 针对已知仓库，随机抽查不少于五个文件，手工验证解析器导入关系精确无误。
-- 覆盖率需准确反馈跳过部分与对应原因，整体数字可信。
-- 换组织账号登录，原则上不得查询到其他组织的数据。
-- 所有表强制打开行级安全，不得遗漏。
-- AI 生成文件解释决不出现仓库中不存在的文件，且必须通过自动检测验证。
-- 聊天面板返回答案前必须清楚呈现查证过程，答复无查证即为产品理念的正向反例。
+- Pointed at a known repository, five files checked by hand match what the
+  parser claims they import.
+- Coverage states what was skipped and why, and the number is believable.
+- Signed in from a different organization, the first organization's rows do not
+  come back from the query at all.
+- Every table in the schema has row-level security enabled. Not most of them.
+- An explanation never names a file absent from the repository, and that is
+  demonstrated by a check rather than asserted.
+- The chat panel shows what it looked up before it answers. An answer arriving
+  with no lookups behind it is the exact failure this product exists to prevent.

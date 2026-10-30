@@ -1,79 +1,122 @@
 # Cartograph
 
-Cartograph 是一个本地应用，用于读取指定的公开 GitHub 仓库，并将代码依赖关系可视化为交互式地图。
+A local app that reads a public GitHub repo and draws it as a dependency map.
+Everything on screen comes from really parsing the code. The AI explains what
+the parser found, it never decides what's there.
 
-- 所有展示数据必须来自真实代码解析结果；
-- AI 仅可解释解析器产出的结果，不得推断、虚构或补全任何依赖关系；
-- 项目目标及设计决策以 `docs/project-doc.md` 为准；本文件定义持续生效的工程执行规范；
+Why any of these rules exist is in `docs/project-doc.md`. This file is the
+rules themselves.
 
-## 技术栈
+## Stack
 
-- **应用框架：** Next.js 16 App Router
-- **UI 框架：** React 19、Tailwind CSS v4
-- **语言：** 严格模式 TypeScript
-- **代码解析：** ts-morph
-- **依赖图可视化：** React Flow、dagre
-- **身份认证与组织管理：** Clerk
-- **数据库：** Supabase（Postgres），使用行级安全策略（RLS）与实时订阅
-- **AI 接入：** 通过项目统一封装的客户端调用 OpenAI SDK
-- **调用追踪：** 所有 AI 请求均通过 LangSmith 追踪
-- **包管理器：** pnpm
+Next.js 16 App Router, React 19, TypeScript strict. ts-morph for parsing. React
+Flow and dagre for the map. Clerk for sign-in and organizations. Supabase for
+Postgres, row-level security and realtime. The OpenAI SDK through one wrapped
+client, traced with LangSmith. Tailwind v4. pnpm.
 
-Next.js 16 的 API 变更较多，对不确定的 API 或行为，必须优先查阅当前已安装依赖包附带的最新文档，不得仅凭记忆实现。
+Next.js 16 changed a lot. If you're not certain about an API, read the docs
+inside the installed package rather than going from memory.
 
-## 工作方式
+## How we work
 
-规范驱动开发，所有内容须有明确设计说明（spec）：
+Spec driven. Nothing gets built without a spec.
 
-1. `docs/project-doc.md` — 描述本 app 的目的及所有设计决策。按需查阅，不要让我重复内容；
-2. `docs/specs/phase-NN.md` — 每个阶段一份，阶段启动前撰写。内容聚焦行为与验收条件，不涉及具体文件名；
-3. 本文件 — 任何时候有效，每轮人工智能交互都需作为依据；
+- `docs/project-doc.md` — what this app is and every decision behind it. Read
+  the part you need. Don't ask me to paste it.
+- `docs/specs/phase-NN.md` — one per phase, written just before it starts.
+  Behaviour and an acceptance check, never filenames.
+- This file — always true, read on every prompt.
 
-- **阶段开始时：** 请务必阅读本文件及对应阶段 spec，仅按 spec 实现需求，到点即止；
-- **如果当前上下文不清晰：** 先查看 `docs/specs/` 目录下的现有文件，再查 git log。最后一条提交即为最近已完成阶段。在此基础上推理当前进度，推断结果直接反馈后再继续下一步；
-- **验收检查仅由我手动完成：** 即：手动浏览器操作一项一项验收，不要自动化、不要安装测试框架或浏览器驱动。你需做的是令所有这些可手动验收的事项成立，然后通知我验收；
-- **你需要自查的内容，只有类型、lint 检查和构建：** 一切终端可几秒内验证的皆属你职责——包括运行脚本并阅读其输出。凡需浏览器配合的验收皆归我，勿越界；
-- **阶段结果如不符要求，直接重来而非补丁式修正：** 错误的实现反复补三次无人能读懂，包括你自己。遇 spec 有歧义，请在动手前直接明确指出；
+**Starting a phase.** Read this file and that phase's spec. Build what the spec
+asks and stop.
 
-## 与我沟通的方式
+**Dropped into a fresh context and don't know where we are?** Look at which
+files exist in `docs/specs/`, then the git log. The last commit is the last
+phase that passed. Tell me what you've worked out before building on it.
 
-简明扼要，非必要内容一律省略：
+**The acceptance check is mine to run, not yours.** It's a list of things I do
+by hand in a browser. Don't automate it, don't install a test runner or browser
+driver for it. Build so those things are true, then tell me it's ready.
 
-- **问题请同时附带你推荐的答案：** 每次只问一个具体问题，同时说明选择理由，例如：“A 还是 B？我选 B，因为保持了解析器独立性。”这样我能秒回。禁止开放式提问，禁止默默选方向，也不要两头都做。
-- **如需我提供专属信息：**（如密钥、Token、`.env.local` 文件内的值），请明确所需内容以及具体位置，等待回复再继续。
-- **禁止输出大段总结：** 无需罗列你改动的所有文件，也无需复述方案。阶段开发完成时，仅需简述阶段功能与预期验收结果即可。
-- **用最简明的英文或中文表达：** 若一句话足够表达，绝不用列点展开。
-- **遇到问题请如实报告：** 默默规避某个失败，日后会导致我成本加倍。
+**What you check before saying a phase is done:** types, lint, build. Anything
+verifiable from a terminal in a few seconds is yours — running a script and
+reading its output counts. Anything needing a browser is mine.
 
-## 代码结构要求
+**When a phase comes out wrong, I reset rather than patch.** Prompting on top of
+wrong code three times leaves code nobody understands, including you. So if a
+spec is ambiguous, say so _before_ you build.
 
-具体文件结构由你决定，以下为行为层面约束：
+## How to talk to me
 
-- **解析器不得引入 Next、React 或数据库客户端：** 只负责数据输入输出，普通脚本下可独立运行。
-- **解析器内部不得做框架判定：** 相关逻辑由适配层处理。
-- **图结构计算全为纯函数：** 输入为文件和依赖边列表。
-- **数据库操作仅在服务端代码中实现：** 组件内部禁止直接访问数据。
-- **数据权限依赖策略管控，不得用应用逻辑判定行可见性：** 若查询语句需通过 `where` 过滤出对的结果，则策略配置有误。
-- **AI 客户端仅统一构造一次：** 其他位置调用不追踪。
+Short. If a sentence isn't telling me something I need, cut it.
 
-## 约定规范
+**Ask with an answer attached.** One specific question, and say which way you'd
+go and why. "A or B, I'd take B because it keeps the parser standalone" is
+answerable in two seconds. An open question isn't. Never pick a direction
+silently, never build both.
 
-- 强类型 TypeScript，严禁使用 `any`。如遇类型过于复杂无法优雅表达，必须反馈原因，禁止强行类型断言；
-- 注释重点写决策背景而非语法细节；
-- 每次 AI 调用，须在 trace 内查缓存。命中缓存则应录 trace，无真实模型调用；
-- 优先选用唯一明确实现方式，勿设计多配置选项；
-- 前端 UI 定位为开发密集型工具：小字号、紧凑间距、文件路径统一等宽字体。配色需有实际含义，否则勿用色彩。任何元素只有点击才会发生变化，无自动动画；
-- 即使你有设计背景，也请优先遵守上述准则——你的设计本能可能让你想拉大字号、强化层次、增加动效。记住：该工具面向长时间高频使用者，以效率和稳定为上；
+**When you need something only I can give you** — a key, a token, a value in
+`.env.local` — say exactly what and exactly where, then stop.
 
-## 禁止事项
+**No walls of text.** Don't summarise every file you touched or restate the plan
+back to me. When a phase is done, say what it does and what the check should
+show, in a few lines.
 
-若违反下列规定，后果比没完成还严重：
+**Plain English.** If you're reaching for a bulleted breakdown of something
+that's one sentence, it's one sentence.
 
-- **禁止主观判定文件间连接**，依赖边只由解析器解析到真实 import 而生成，未解析成功的情况必须说明原因，不得猜测填补；
-- **禁止凭空编造补全缺失内容**，漏掉的文件应如实报告并计数，未能还原的路由直接忽略，宁缺毋滥；
-- **安装新依赖前必须说明需求和用途，并等待反馈再操作**；
-- **禁止提前开发非当前阶段内容或架构**，不得为未来阶段预留接口/文件；
-- **禁止对代码做评分、评级或“问题发现”**，此工具只做静态解释，不做代码评审；
-- **禁止在构建未通过时继续开发**，遇到构建等问题应及时上报，不得绕过或临时修正；
-- **禁止下调验收标准以求验收通过**，无法验证的场景须主动报错而非蒙混过关；
-- **禁止频繁从数据库循环读取**，明确具体列名，控制列表读取数量，需实时更新请使用订阅，禁止采用轮询方式；
+**Say when something didn't work.** A failure worked around quietly costs me an
+hour later.
+
+## How the code is laid out
+
+You pick the file structure. These are about behaviour.
+
+- **The parsing code can't import Next, React or the database client.** Path in,
+  data out, runnable from a plain script.
+- **No framework checks inside the parser.** That knowledge lives in an adapter.
+- **Graph calculations are pure functions** over a file list and an edge list.
+- **Database access happens in server code**, not inside components.
+- **Who may read a row is decided by a policy**, never by application code. If a
+  query needs a `where` clause to return the right rows, the policy is wrong.
+- **One place constructs the AI client.** Anywhere else silently skips tracing.
+
+## Conventions
+
+Strict TypeScript, no `any`. If a type is genuinely awkward, tell me rather than
+casting.
+
+Comment the decisions, not the syntax.
+
+Every AI call has a cache read inside its trace, so a cache hit shows up as a
+recorded run with no model call in it.
+
+One obvious way to do something beats a configurable one.
+
+The UI is a dense developer tool. Small type, tight spacing, monospace for file
+paths. Colour means something or isn't there. Nothing moves unless it was
+clicked.
+
+There's a frontend design skill that activates on its own for UI work. Use it,
+but the paragraph above overrules it — it will reach for motion, depth and big
+type, and this is a tool someone stares at for an hour.
+
+## Things not to do
+
+Breaking one of these is worse than not finishing.
+
+- **Never decide that two files are connected.** An edge exists because the
+  parser resolved a real import to a real file. Unresolved gets reported with a
+  reason, never guessed.
+- **Never invent something to fill a gap.** Skipped file? Say so and count it.
+  Route not fully recoverable? Show none. Absent beats approximate.
+- **Don't install a package without asking.** Name it, say what for, wait.
+- **Don't build ahead of the current phase.** No scaffolding for what's coming.
+- **Don't grade the code.** No scores, ratings, severity or "issues found". This
+  explains a codebase, it doesn't review one.
+- **Don't leave the build broken.** Tell me about a failure instead of working
+  around it.
+- **Don't weaken a check to make it pass.** A check that can't run has to fail
+  loudly.
+- **Don't read from the database on a loop.** Name your columns, limit list
+  reads, subscribe instead of polling.
