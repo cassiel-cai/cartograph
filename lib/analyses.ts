@@ -30,7 +30,7 @@ export async function listAnalyses(): Promise<AnalysisListResult> {
     .limit(LIST_LIMIT);
 
   if (error) {
-    throw new Error(`Could not read analyses: ${error.message}`);
+    throw new Error(`Could not read analyses: ${describeReadError(error.message)}`);
   }
 
   // The client formats relative times from this instant. Capturing it here,
@@ -73,6 +73,22 @@ function readAnalyses(rows: unknown): Analysis[] {
       detail: readOptionalText(row.detail, index, "detail"),
     };
   });
+}
+
+function describeReadError(message: string): string {
+  if (/521|Web server is down/i.test(message)) {
+    return (
+      "Supabase project is unreachable (HTTP 521). In the dashboard, check whether " +
+      "the project is paused, still provisioning, or needs to be restored."
+    );
+  }
+
+  const trimmed = message.trimStart();
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
+    return "Supabase returned an HTML error page instead of JSON. Check project status in the Supabase dashboard.";
+  }
+
+  return message.length > 240 ? `${message.slice(0, 240)}…` : message;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
