@@ -90,3 +90,11 @@ button.cl-formButtonPrimary {
   background-image: none;
   color: var(--clerk-color-primary-foreground);
 }
+
+.react-flow__node-module {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
