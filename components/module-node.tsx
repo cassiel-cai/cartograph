@@ -1,6 +1,7 @@
 'use client'
 
 import { useLocale } from '@/components/locale-provider'
+import { PathText } from '@/components/path-text'
 import { messagesFor } from '@/lib/messages'
 import type { MapHighlight } from '@/lib/map/selection'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
@@ -33,16 +34,31 @@ export type ModuleNodeData = {
   dimmed: boolean
   selected: boolean
   hovered: boolean
+  matched: number | null
 }
 
 export type ModuleFlowNode = Node<ModuleNodeData, 'module'>
 
-function NodeSummary({ label, fileCount, fanIn, fanOut }: { label: string; fileCount: string; fanIn: number; fanOut: number }) {
+function NodeSummary({
+  label,
+  fileCount,
+  fileTitle,
+  fanIn,
+  fanOut,
+}: {
+  label: string
+  fileCount: string
+  fileTitle?: string
+  fanIn: number
+  fanOut: number
+}) {
   return (
     <>
       <span className="font-mono text-[12px] whitespace-nowrap">{label}</span>
       <span className="flex items-center gap-2 font-mono text-[12px] whitespace-nowrap">
-        <span className="text-muted">{fileCount}</span>
+        <span className="text-muted" title={fileTitle}>
+          {fileCount}
+        </span>
         <span className="text-in tabular-nums">←{fanIn}</span>
         <span className="text-out tabular-nums">{fanOut}→</span>
       </span>
@@ -77,6 +93,10 @@ export function ModuleNode({ id, data }: NodeProps<ModuleFlowNode>) {
   const copy = messagesFor(useLocale())
   const onListScroll = useContext(ListScrollContext)
   const hover = useContext(MapHoverContext)
+  const fileCount =
+    data.matched === null ? copy.filesLabel(data.fileCount) : copy.matchedOf(data.matched, data.fileCount)
+  const fileTitle =
+    data.matched === null ? undefined : copy.matchedTitle(data.matched, data.fileCount)
   const border = data.selected || data.hovered ? 'border-accent' : 'border-border'
   const above = data.rows.some(row => row.placement === 'above')
   const below = data.rows.some(row => row.placement === 'below')
@@ -99,7 +119,7 @@ export function ModuleNode({ id, data }: NodeProps<ModuleFlowNode>) {
             className={`nodrag nopan flex h-11.5 shrink-0 flex-col items-start justify-center border-b border-border px-2 text-left ${data.selected ? 'bg-accent/10' : ''}`}
             onClick={event => event.preventDefault()}
           >
-            <NodeSummary label={data.label} fileCount={copy.filesLabel(data.fileCount)} fanIn={data.fanIn} fanOut={data.fanOut} />
+            <NodeSummary label={data.label} fileCount={fileCount} fileTitle={fileTitle} fanIn={data.fanIn} fanOut={data.fanOut} />
           </button>
           <div className="relative min-h-0 flex-1">
             {above ? <EdgeAnchors id="above" top={6} /> : null}
@@ -133,7 +153,9 @@ export function ModuleNode({ id, data }: NodeProps<ModuleFlowNode>) {
                     onMouseLeave={() => hover({ kind: 'node', id })}
                   >
                     <span className="size-1.5 shrink-0" style={{ background: row.color }} />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px]">{row.label}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[12px]">
+                      <PathText text={row.label} />
+                    </span>
                     <span className="shrink-0 font-mono text-[12px] text-in tabular-nums">←{row.fanIn}</span>
                     <span className="shrink-0 font-mono text-[12px] text-out tabular-nums">{row.fanOut}→</span>
                   </button>
@@ -152,7 +174,7 @@ export function ModuleNode({ id, data }: NodeProps<ModuleFlowNode>) {
             className={`nodrag nopan flex h-full w-full flex-col items-start px-2 py-1.5 text-left ${data.selected ? 'bg-accent/10' : ''}`}
             onClick={event => event.preventDefault()}
           >
-            <NodeSummary label={data.label} fileCount={copy.filesLabel(data.fileCount)} fanIn={data.fanIn} fanOut={data.fanOut} />
+            <NodeSummary label={data.label} fileCount={fileCount} fileTitle={fileTitle} fanIn={data.fanIn} fanOut={data.fanOut} />
           </button>
         </div>
       )}
