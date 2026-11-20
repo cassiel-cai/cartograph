@@ -1,5 +1,7 @@
 "use client";
 
+import { InsightsPanel } from "@/components/insights-panel";
+import { PathText } from "@/components/path-text";
 import { useLocale } from "@/components/locale-provider";
 import { extensionColor } from "@/lib/map/categories";
 import {
@@ -10,6 +12,7 @@ import {
   type LinkedFile,
 } from "@/lib/map/detail";
 import type { MapHighlight, MapSelection } from "@/lib/map/selection";
+import { walkFiles, type Walk, type WalkDirection } from "@/lib/map/walk";
 import { messagesFor } from "@/lib/messages";
 import type { ParseResult } from "@/parser/types";
 import { useState, type ReactNode } from "react";
@@ -35,6 +38,7 @@ export function DetailPane({
 }) {
   const copy = messagesFor(useLocale());
   const [tab, setTab] = useState<Tab>("structure");
+  const [walk, setWalk] = useState<WalkDirection | null>(null);
   const summary = repositorySummary(result);
   const selected = selectedDetail(result, selection, nodes);
 
@@ -54,7 +58,7 @@ export function DetailPane({
             <div className="px-3 pt-3">
               <p className="text-[11px] text-muted">{copy.file}</p>
               <p className="mt-1 font-mono text-[13px] leading-snug break-all">
-                {selected?.path}
+                <PathText text={selected?.path ?? ""} />
               </p>
             </div>
             <div className="mt-3 flex border-b border-border px-3">
@@ -74,6 +78,9 @@ export function DetailPane({
             ) : (
               <FileStructure
                 detail={selected}
+                result={result}
+                walk={walk}
+                onWalk={setWalk}
                 highlight={highlight}
                 nodes={nodes}
                 onSelectFile={onSelectFile}
@@ -82,6 +89,13 @@ export function DetailPane({
             )}
           </>
         )}
+        <InsightsPanel
+          result={result}
+          highlight={highlight}
+          nodes={nodes}
+          onSelectFile={onSelectFile}
+          onHoverPath={onHoverPath}
+        />
       </div>
     </div>
   );
@@ -221,12 +235,18 @@ function RepositorySummaryView({
 
 function FileStructure({
   detail,
+  result,
+  walk,
+  onWalk,
   highlight,
   nodes,
   onSelectFile,
   onHoverPath,
 }: {
   detail: FileDetail | null;
+  result: ParseResult;
+  walk: WalkDirection | null;
+  onWalk: (walk: WalkDirection | null) => void;
   highlight: MapHighlight;
   nodes: readonly { id: string; files: string[] }[];
   onSelectFile: (path: string) => void;
@@ -234,6 +254,8 @@ function FileStructure({
 }) {
   const copy = messagesFor(useLocale());
   if (!detail) return null;
+  const isFile = result.files.some((file) => file.path === detail.path);
+  const walked = isFile && walk ? walkFiles(detail.path, result.edges, walk) : null;
   return (
     <div>
       <dl className="border-b border-border px-3 py-2">
@@ -263,6 +285,17 @@ function FileStructure({
           <span className="font-mono text-in">{copy.filesCount(detail.dependedOnBy.length)}</span>
         </Fact>
       </dl>
+      {isFile ? (
+        <WalkSection
+          walk={walk}
+          walked={walked}
+          onWalk={onWalk}
+          highlight={highlight}
+          nodes={nodes}
+          onSelectFile={onSelectFile}
+          onHoverPath={onHoverPath}
+        />
+      ) : null}
       <LinkSection
         title={copy.imports}
         mark={<span className="text-out tabular-nums">{detail.dependsOn.length}→</span>}
@@ -314,6 +347,136 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function WalkSection({
+  walk,
+  walked,
+  onWalk,
+  highlight,
+  nodes,
+  onSelectFile,
+  onHoverPath,
+}: {
+  walk: WalkDirection | null;
+  walked: Walk | null;
+  onWalk: (walk: WalkDirection | null) => void;
+  highlight: MapHighlight;
+  nodes: readonly { id: string; files: string[] }[];
+  onSelectFile: (path: string) => void;
+  onHoverPath: (path: string | null) => void;
+}) {
+  const copy = messagesFor(useLocale());
+  const choose = (direction: WalkDirection) => {
+    onWalk(walk === direction ? null : direction);
+  };
+  const incoming = walk === "dependents";
+  const steps = walked?.steps ?? [];
+  const near = steps.filter((step) => step.depth === 1);
+  const far = steps.filter((step) => step.depth === 2);
+  return (
+    <section className="border-b border-border px-3 py-2">
+      <div className="flex gap-2">
+        <WalkButton
+          label={copy.blastRadius}
+          active={walk === "dependents"}
+          onClick={() => choose("dependents")}
+        />
+        <WalkButton
+          label={copy.dependencyChain}
+          active={walk === "needs"}
+          onClick={() => choose("needs")}
+        />
+      </div>
+      {walk && walked ? (
+        <div className="pt-3">
+          <header className="flex items-baseline gap-3">
+            <p className="min-w-0 flex-1">
+              {incoming ? copy.blastRadiusAbout : copy.dependencyChainAbout}
+            </p>
+            <span className={`shrink-0 font-mono text-[13px] tabular-nums ${incoming ? "text-in" : "text-out"}`}>
+              {steps.length}
+            </span>
+          </header>
+          <StepGroup
+            label={copy.stepAway(1, near.length)}
+            steps={near}
+            highlight={highlight}
+            nodes={nodes}
+            onSelectFile={onSelectFile}
+            onHoverPath={onHoverPath}
+          />
+          <StepGroup
+            label={copy.stepAway(2, far.length)}
+            steps={far}
+            highlight={highlight}
+            nodes={nodes}
+            onSelectFile={onSelectFile}
+            onHoverPath={onHoverPath}
+          />
+          {walked.omitted > 0 ? (
+            <p className="pt-2 text-muted">{copy.furtherNotListed(walked.omitted)}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function StepGroup({
+  label,
+  steps,
+  highlight,
+  nodes,
+  onSelectFile,
+  onHoverPath,
+}: {
+  label: string;
+  steps: readonly { path: string }[];
+  highlight: MapHighlight;
+  nodes: readonly { id: string; files: string[] }[];
+  onSelectFile: (path: string) => void;
+  onHoverPath: (path: string | null) => void;
+}) {
+  if (steps.length === 0) return null;
+  return (
+    <div className="pt-2">
+      <p className="text-muted">{label}</p>
+      <ul>
+        {steps.map((step) => (
+          <PathRow
+            key={step.path}
+            path={step.path}
+            label={filePathLabel(step.path)}
+            lit={pathHighlighted(step.path, highlight, nodes)}
+            onSelect={() => onSelectFile(step.path)}
+            onHover={onHoverPath}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WalkButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`flex-1 border px-2 py-1 ${active ? "border-accent bg-accent/15 text-foreground" : "border-border bg-background text-foreground"}`}
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
 function LinkSection({
   title,
   mark,
@@ -358,12 +521,14 @@ function LinkSection({
 
 function PathRow({
   path,
+  label,
   lit,
   trailing,
   onSelect,
   onHover,
 }: {
   path: string;
+  label?: string;
   lit: boolean;
   trailing?: ReactNode;
   onSelect: () => void;
@@ -379,7 +544,9 @@ function PathRow({
         onMouseEnter={() => onHover(path)}
         onMouseLeave={() => onHover(null)}
       >
-        <span className="min-w-0 flex-1 truncate">{middleEllipsis(path)}</span>
+        <span className="min-w-0 flex-1 truncate">
+          <PathText text={label ?? middleEllipsis(path)} />
+        </span>
         {trailing ? <span className="shrink-0">{trailing}</span> : null}
       </button>
     </li>
@@ -391,6 +558,16 @@ function Remainder({ shown, total }: { shown: number; total: number }) {
   const rest = total - shown;
   if (rest <= 0) return null;
   return <p className="py-1 text-muted">{copy.moreNotListed(rest)}</p>;
+}
+
+function filePathLabel(path: string): string {
+  const max = 42;
+  if (path.length <= max) return path;
+  const slash = path.lastIndexOf("/");
+  const file = slash === -1 ? path : path.slice(slash + 1);
+  const mark = "…/";
+  if (file.length + mark.length >= max) return file;
+  return `${path.slice(0, max - file.length - mark.length)}${mark}${file}`;
 }
 
 function middleEllipsis(path: string): string {

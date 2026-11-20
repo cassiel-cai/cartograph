@@ -86,6 +86,32 @@ const en = {
   importedBy: "Imported by",
   typeOnly: "type",
   inside: "Inside",
+  blastRadius: "Blast radius",
+  blastRadiusAbout: "what imports this, directly or through others",
+  dependencyChain: "Dependency chain",
+  dependencyChainAbout: "what this imports, directly or through others",
+  stepAway(step: number, count: number) {
+    return step === 1 ? `1 step away · ${count}` : `${step} steps away · ${count}`;
+  },
+  furtherNotListed(count: number) {
+    return `${count} more further than 2 steps, not listed.`;
+  },
+  insights: "Insights",
+  insightUnimportedTitle: "Nothing imports it",
+  insightUnimported:
+    "Nothing in this repository imports this file. Pages, routes, layouts, middleware and config are left out.",
+  insightUnusualTitle: "Imported more than usual",
+  insightUnusual: "More files import this than is usual in this repository.",
+  insightCycleTitle: "Cycles",
+  insightCycle: "These files import each other in a cycle.",
+  insightLongTitle: "Length",
+  insightLong: "This file is longer than the files around it.",
+  matchedOf(matched: number, total: number) {
+    return `${matched}/${total}`;
+  },
+  matchedTitle(matched: number, total: number) {
+    return `${matched} of ${total}`;
+  },
 };
 
 const zh = {
@@ -173,6 +199,32 @@ const zh = {
   importedBy: "导入者",
   typeOnly: "类型",
   inside: "里面",
+  blastRadius: "爆炸半径",
+  blastRadiusAbout: "直接或间接导入它的文件",
+  dependencyChain: "依赖链",
+  dependencyChainAbout: "它直接或间接导入的文件",
+  stepAway(step: number, count: number) {
+    return `${step} 步 · ${count}`;
+  },
+  furtherNotListed(count: number) {
+    return `还有 ${count} 个超过两步，不列出。`;
+  },
+  insights: "观察",
+  insightUnimportedTitle: "没有文件导入",
+  insightUnimported:
+    "这个仓库里没有文件导入它。页面、路由、布局、中间件和配置不列在这里。",
+  insightUnusualTitle: "被导入得比平常多",
+  insightUnusual: "导入它的文件比这个仓库里的平常情况多。",
+  insightCycleTitle: "环",
+  insightCycle: "这些文件互相导入，形成一个环。",
+  insightLongTitle: "长度",
+  insightLong: "这个文件比它周围的文件长。",
+  matchedOf(matched: number, total: number) {
+    return `${matched}/${total}`;
+  },
+  matchedTitle(matched: number, total: number) {
+    return `${total} 个里的 ${matched} 个`;
+  },
 } satisfies typeof en;
 
 const catalogs = { en, zh } as const;

@@ -11,10 +11,11 @@ import {
   type ModuleFlowNode,
   type ModuleNodeData,
 } from "@/components/module-node";
+import { extensionOf } from "@/lib/map/categories";
 import { buildMap, type MapEdge, type MapNode } from "@/lib/map/present";
 import {
-  brightFiles,
-  edgeIsLit,
+  edgeInView,
+  shownFiles,
   type MapHighlight,
   type MapSelection,
 } from "@/lib/map/selection";
@@ -47,6 +48,7 @@ export function MapCanvas({ result }: { result: ParseResult }) {
 function MapView({ result }: { result: ParseResult }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [selection, setSelection] = useState<MapSelection>(null);
+  const [category, setCategory] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<MapHighlight>(null);
   const [zoomLabel, setZoomLabel] = useState<string | null>(null);
   const zoomHide = useRef(0);
@@ -159,13 +161,19 @@ function MapView({ result }: { result: ParseResult }) {
     [getZoom, openIds],
   );
 
+  const categoryFiles = useMemo(() => {
+    if (!category) return null;
+    return new Set(
+      result.files.filter((file) => extensionOf(file.path) === category).map((file) => file.path),
+    );
+  }, [category, result.files]);
   const derivedNodes = useMemo(
-    () => toFlowNodes(model.nodes, selection, highlight, model.links),
-    [model, selection, highlight],
+    () => toFlowNodes(model.nodes, selection, highlight, model.links, categoryFiles),
+    [model, selection, highlight, categoryFiles],
   );
   const derivedEdges = useMemo(
-    () => toFlowEdges(model.edges, selection, model.nodes, model.links),
-    [model, selection],
+    () => toFlowEdges(model.edges, selection, model.nodes, model.links, categoryFiles),
+    [model, selection, categoryFiles],
   );
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(derivedNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(derivedEdges);
@@ -201,7 +209,15 @@ function MapView({ result }: { result: ParseResult }) {
     <ListScrollContext.Provider value={onListScroll}>
     <MapHoverContext.Provider value={setHighlight}>
       <MapShell
-        rail={<CategoryRail files={result.files} />}
+        rail={
+          <CategoryRail
+            files={result.files}
+            selected={category}
+            onSelect={(extension) =>
+              setCategory((current) => (current === extension ? null : extension))
+            }
+          />
+        }
         canvas={
           <div className="absolute inset-0">
             <ReactFlow
@@ -264,8 +280,9 @@ function toFlowNodes(
   selection: MapSelection,
   highlight: MapHighlight,
   links: readonly { from: string; to: string }[],
+  category: ReadonlySet<string> | null,
 ): ModuleFlowNode[] {
-  const bright = brightFiles(selection, nodes, links);
+  const bright = shownFiles(selection, category, nodes, links);
   return nodes.map((node) => {
     const nodeBright = bright === null || node.files.some((file) => bright.has(file));
     const nodeHovered =
@@ -280,6 +297,7 @@ function toFlowNodes(
       dimmed: !nodeBright,
       selected: selection?.kind === "node" && selection.id === node.id,
       hovered: nodeHovered,
+      matched: category === null ? null : node.files.filter((file) => category.has(file)).length,
       rows: node.rows.map((row) => ({
         path: row.path,
         label: row.label,
@@ -322,10 +340,11 @@ function toFlowEdges(
   selection: MapSelection,
   nodes: readonly MapNode[],
   links: readonly { from: string; to: string }[],
+  category: ReadonlySet<string> | null,
 ): Edge[] {
-  const bright = brightFiles(selection, nodes, links);
+  const bright = shownFiles(selection, category, nodes, links);
   return edges.map((edge) => {
-    const lit = edgeIsLit(edge, selection, bright);
+    const lit = edgeInView(edge, selection, bright, category);
     return {
       id: edge.id,
       source: edge.source,
