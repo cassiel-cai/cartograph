@@ -69,9 +69,17 @@ export function edgeInView(
   if (selection) {
     if (!edgeIsLit(edge, selection, shown)) return false;
     if (category === null) return true;
-    return category.has(edge.from) && category.has(edge.to);
+    return edgeTouches(edge, category);
   }
-  return category !== null && category.has(edge.from) && category.has(edge.to);
+  // Either end. Both ends would hide the imports that leave the category.
+  return category !== null && edgeTouches(edge, category);
+}
+
+function edgeTouches(
+  edge: Pick<MapEdge, "from" | "to">,
+  files: ReadonlySet<string>,
+): boolean {
+  return files.has(edge.from) || files.has(edge.to);
 }
 
 // File selection lights only its own edges. Node selection lights any edge touching the neighbourhood.

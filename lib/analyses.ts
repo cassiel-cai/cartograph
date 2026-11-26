@@ -9,6 +9,7 @@ export type Analysis = {
   startedAt: string | null;
   finishedAt: string | null;
   detail: string | null;
+  stage: string | null;
 };
 
 export type AnalysisListResult = {
@@ -24,7 +25,7 @@ export async function listAnalyses(): Promise<AnalysisListResult> {
   const { data, error } = await supabase
     .from("analyses")
     .select(
-      "id, repository_url, state, commit_sha, started_at, finished_at, detail",
+      "id, repository_url, state, commit_sha, started_at, finished_at, detail, stage",
     )
     .order("started_at", { ascending: false, nullsFirst: false })
     .limit(LIST_LIMIT);
@@ -38,6 +39,27 @@ export async function listAnalyses(): Promise<AnalysisListResult> {
   // the same value.
   await io();
   return { analyses: readAnalyses(data), now: Date.now() };
+}
+
+export async function getAnalysis(
+  id: number,
+): Promise<{ analysis: Analysis | null; now: number }> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("analyses")
+    .select(
+      "id, repository_url, state, commit_sha, started_at, finished_at, detail, stage",
+    )
+    .eq("id", id)
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Could not read analysis ${id}: ${describeReadError(error.message)}`);
+  }
+
+  await io();
+  const rows = readAnalyses(data);
+  return { analysis: rows[0] ?? null, now: Date.now() };
 }
 
 function readAnalyses(rows: unknown): Analysis[] {
@@ -71,6 +93,7 @@ function readAnalyses(rows: unknown): Analysis[] {
       startedAt,
       finishedAt,
       detail: readOptionalText(row.detail, index, "detail"),
+      stage: readOptionalText(row.stage, index, "stage"),
     };
   });
 }

@@ -2,12 +2,18 @@ import fs from "node:fs"
 import path from "node:path"
 
 import { loadParseResult } from "./load"
+import { detectAdapter } from "./adapters"
 import { parseRepository } from "./parse"
+import { walk } from "./walk"
 import type { ParseResult } from "./types"
 
 function main(): void {
   const { directory, out } = readArgs(process.argv.slice(2))
-  const result = parseRepository(directory)
+  const adapter = detectAdapter(
+    directory,
+    walk(directory, []).candidates.map((candidate) => candidate.path),
+  )
+  const result = parseRepository(directory, adapter)
   process.stdout.write(`${report(result)}\n`)
   if (!out) return
   const destination = path.resolve(out)
@@ -62,7 +68,14 @@ function report(result: ParseResult): string {
     `re-exports resolved: ${counts.reexportsResolved}`,
     `re-export gaps: ${counts.reexportsFound - counts.reexportsResolved}`,
     `excluded directories: ${result.excludedDirectories.length}`,
+    `routes: ${result.routes.length}`,
   ]
+  for (const [role, count] of grouped(result.files.map((file) => file.role))) {
+    lines.push(`  role ${count}  ${role}`)
+  }
+  for (const route of result.routes) {
+    lines.push(`  ${route.method.padEnd(7)} ${route.pattern}  ${route.file}:${route.line}`)
+  }
   for (const [reason, count] of grouped(
     result.excludedDirectories.map((directory) => directory.reason),
   )) {

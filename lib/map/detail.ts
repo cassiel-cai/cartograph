@@ -1,3 +1,4 @@
+import { fallbackRole, GENERIC_ADAPTER } from "@/parser/taxonomy";
 import { extensionOf, fileCategories } from "@/lib/map/categories";
 import type { ParseResult } from "@/parser/types";
 
@@ -100,10 +101,11 @@ export function repositorySummary(result: ParseResult): RepositorySummary {
     filesSkipped: result.counts.filesSkipped,
     imports: result.counts.importsSeen,
     importsUnresolved: result.counts.importsUnresolved,
-    // No adapter recovered a method and a full path, so the route count is absent.
-    routes: result.adapter === "none" ? null : 0,
-    // Nothing on a file records a convention role. Every parsed file is unidentified.
-    unidentified: result.files.length,
+    // With no adapter there is nothing to count; a dash, not a zero.
+    routes: result.adapter === GENERIC_ADAPTER ? null : result.routes.length,
+    unidentified: result.files.filter(
+      (file) => file.role === fallbackRole(result.adapter),
+    ).length,
     leanedOn,
     startHere,
   };

@@ -14,7 +14,7 @@ import {
 import type { MapHighlight, MapSelection } from "@/lib/map/selection";
 import { walkFiles, type Walk, type WalkDirection } from "@/lib/map/walk";
 import { messagesFor } from "@/lib/messages";
-import type { ParseResult } from "@/parser/types";
+import type { ParseResult, Route } from "@/parser/types";
 import { useState, type ReactNode } from "react";
 
 type Tab = "structure" | "explanation";
@@ -23,6 +23,7 @@ const LIST_LIMIT = 10;
 
 export function DetailPane({
   result,
+  route,
   selection,
   highlight,
   nodes,
@@ -30,6 +31,7 @@ export function DetailPane({
   onHoverPath,
 }: {
   result: ParseResult;
+  route: Route | null;
   selection: MapSelection;
   highlight: MapHighlight;
   nodes: readonly { id: string; label: string; files: string[] }[];
@@ -45,7 +47,20 @@ export function DetailPane({
   return (
     <div className="flex h-full min-h-0 flex-col text-[12px]">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {!selection ? (
+        {route ? (
+          <RouteView
+            route={route}
+            result={result}
+            tab={tab}
+            onTab={setTab}
+            walk={walk}
+            onWalk={setWalk}
+            highlight={highlight}
+            nodes={nodes}
+            onSelectFile={onSelectFile}
+            onHoverPath={onHoverPath}
+          />
+        ) : !selection ? (
           <RepositorySummaryView
             summary={summary}
             highlight={highlight}
@@ -98,6 +113,71 @@ export function DetailPane({
         />
       </div>
     </div>
+  );
+}
+
+function RouteView({
+  route,
+  result,
+  tab,
+  onTab,
+  walk,
+  onWalk,
+  highlight,
+  nodes,
+  onSelectFile,
+  onHoverPath,
+}: {
+  route: Route;
+  result: ParseResult;
+  tab: Tab;
+  onTab: (tab: Tab) => void;
+  walk: WalkDirection | null;
+  onWalk: (walk: WalkDirection | null) => void;
+  highlight: MapHighlight;
+  nodes: readonly { id: string; files: string[] }[];
+  onSelectFile: (path: string) => void;
+  onHoverPath: (path: string | null) => void;
+}) {
+  const copy = messagesFor(useLocale());
+  const detail = fileDetail(result, route.file);
+  return (
+    <>
+      <div className="px-3 pt-3">
+        <p className="text-[11px] text-muted">{copy.route}</p>
+        <p className="mt-1 font-mono text-[13px] leading-snug break-all">
+          {route.method} {route.pattern}
+        </p>
+        <p className="mt-2 text-muted">
+          {copy.routesDeclared}{" "}
+          <span className="font-mono break-all text-foreground">
+            {route.file}:{route.line}
+          </span>
+        </p>
+      </div>
+      <div className="mt-3 flex border-b border-border px-3">
+        <TabButton active={tab === "structure"} label={copy.structure} onClick={() => onTab("structure")} />
+        <TabButton
+          active={tab === "explanation"}
+          label={copy.explanation}
+          onClick={() => onTab("explanation")}
+        />
+      </div>
+      {tab === "explanation" ? (
+        <p className="px-3 py-3 text-muted">{copy.explanationEmpty}</p>
+      ) : (
+        <FileStructure
+          detail={detail}
+          result={result}
+          walk={walk}
+          onWalk={onWalk}
+          highlight={highlight}
+          nodes={nodes}
+          onSelectFile={onSelectFile}
+          onHoverPath={onHoverPath}
+        />
+      )}
+    </>
   );
 }
 
@@ -227,7 +307,9 @@ function RepositorySummaryView({
           <h2>{copy.unidentifiedTitle}</h2>
           <span className="ml-auto font-mono tabular-nums">{summary.unidentified}</span>
         </header>
-        <p className="mt-1 text-muted">{copy.unidentifiedNone}</p>
+        {summary.routes === null ? (
+          <p className="mt-1 text-muted">{copy.unidentifiedNone}</p>
+        ) : null}
       </section>
     </div>
   );

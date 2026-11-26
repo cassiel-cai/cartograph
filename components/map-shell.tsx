@@ -6,11 +6,13 @@ const DETAIL_WIDTH = 'w-80'
 
 export function MapShell({
   rail,
+  tabs,
   canvas,
   detail,
   zoom,
 }: {
   rail?: ReactNode
+  tabs?: ReactNode
   canvas?: ReactNode
   detail?: ReactNode
   zoom?: string | null
@@ -20,7 +22,10 @@ export function MapShell({
       <aside aria-label="Categories" className={`${RAIL_WIDTH} shrink-0 overflow-y-auto border-r border-border bg-surface`}>
         {rail}
       </aside>
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background">{canvas}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        {tabs}
+        <div className="relative min-h-0 flex-1 overflow-hidden">{canvas}</div>
+      </div>
       <aside aria-label="Detail" className={`${DETAIL_WIDTH} relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-border bg-surface`}>
         {detail}
         {zoom ? (

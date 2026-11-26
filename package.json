@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "parse": "tsc -p tsconfig.parser.json && node parser/dist/cli.js"
+    "parse": "tsc -p tsconfig.parser.json && node parser/dist/cli.js",
+    "analyse": "tsc -p tsconfig.pipeline.json && node --env-file=.env.local dist-pipeline/scripts/analyse.js"
   },
   "dependencies": {
     "@clerk/localizations": "^4.24.3",

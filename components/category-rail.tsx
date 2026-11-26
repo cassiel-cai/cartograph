@@ -1,23 +1,22 @@
 "use client";
 
 import { useLocale } from "@/components/locale-provider";
-import { fileCategories } from "@/lib/map/categories";
+import type { RailItem } from "@/lib/map/rail";
 import { messagesFor } from "@/lib/messages";
 import { useState } from "react";
 
 export function CategoryRail({
-  files,
+  items,
   selected,
   onSelect,
 }: {
-  files: readonly { path: string }[];
+  items: readonly RailItem[];
   selected: string | null;
-  onSelect: (extension: string) => void;
+  onSelect: (key: string) => void;
 }) {
-  const categories = fileCategories(files);
   const copy = messagesFor(useLocale());
   const [open, setOpen] = useState(true);
-  const total = categories.reduce((sum, category) => sum + category.count, 0);
+  const total = items.reduce((sum, category) => sum + category.count, 0);
 
   return (
     <div className="py-1">
@@ -32,25 +31,27 @@ export function CategoryRail({
       </button>
       {open ? (
         <ul>
-          {categories.map((category) => {
-            const active = selected === category.extension;
+          {items.map((category) => {
+            const active = selected === category.key;
             return (
-              <li key={category.extension}>
+              <li key={category.key}>
                 <button
                   type="button"
                   className={`flex w-full items-center gap-2 px-2 py-0.5 text-left ${active ? "bg-accent/15" : ""}`}
                   aria-pressed={active}
-                  onClick={() => onSelect(category.extension)}
+                  onClick={() => onSelect(category.key)}
                 >
-                  <span
-                    className="size-2 shrink-0"
-                    style={{ background: category.color }}
-                    aria-hidden
-                  />
+                  {category.color ? (
+                    <span
+                      className="size-2 shrink-0"
+                      style={{ background: category.color }}
+                      aria-hidden
+                    />
+                  ) : null}
                   <span
                     className={`min-w-0 flex-1 font-mono text-[12px] ${active ? "text-accent" : ""}`}
                   >
-                    {category.extension}
+                    {category.label}
                   </span>
                   <span className="font-mono text-[12px] text-muted tabular-nums">
                     {category.count}

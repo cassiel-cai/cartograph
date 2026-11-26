@@ -2,6 +2,7 @@ import fs from "node:fs"
 
 import { computeDegrees, edgeKey } from "./graph"
 import { folderOf, moduleOf } from "./paths"
+import { rolesFor } from "./taxonomy"
 import {
   PARSE_RESULT_VERSION,
   type Edge,
@@ -12,6 +13,7 @@ import {
   type ParseCounts,
   type ParseResult,
   type ParsedFile,
+  type Route,
   type SkippedFile,
 } from "./types"
 
@@ -23,7 +25,7 @@ export function loadParseResult(file: string): ParseResult {
 export function assertParseResult(value: unknown): ParseResult {
   const record = asRecord(value, "result")
   if (record.version !== PARSE_RESULT_VERSION) {
-    invalid("version is not 1")
+    invalid(`version is not ${PARSE_RESULT_VERSION}`)
   }
   const root = readString(record, "root")
   const adapter = readString(record, "adapter")
@@ -35,11 +37,17 @@ export function assertParseResult(value: unknown): ParseResult {
   )
   const edges = readArray(record, "edges").map(readEdge)
   const imports = readArray(record, "imports").map(readImport)
+  const routes = readArray(record, "routes").map(readRoute)
   const counts = readCounts(asRecord(record.counts, "counts"))
 
+  const roles = rolesFor(adapter)
+  if (!roles) invalid(`adapter ${adapter} has no role list`)
   const parsed = new Set<string>()
   for (const file of files) {
     if (parsed.has(file.path)) invalid(`duplicate parsed file ${file.path}`)
+    if (!roles.includes(file.role)) {
+      invalid(`role ${file.role} is not a ${adapter} role for ${file.path}`)
+    }
     parsed.add(file.path)
     if (file.folder !== folderOf(file.path)) {
       invalid(`folder does not match the path for ${file.path}`)
@@ -174,6 +182,10 @@ export function assertParseResult(value: unknown): ParseResult {
     if (!resolvedKeys.has(key)) invalid("edge has no resolved import")
   }
 
+  for (const route of routes) {
+    if (!parsed.has(route.file)) invalid(`route is not from a parsed file: ${route.file}`)
+  }
+
   const degrees = computeDegrees(
     files.map((file) => file.path),
     edges,
@@ -199,6 +211,7 @@ export function assertParseResult(value: unknown): ParseResult {
     excludedDirectories,
     edges,
     imports,
+    routes,
     counts,
   }
 }
@@ -262,10 +275,23 @@ function readFileRecord(value: unknown): ParsedFile {
     path: readPath(record.path, "file path is not inside the repository"),
     folder: readFolder(record.folder),
     module: readString(record, "module"),
+    role: readString(record, "role"),
     lines: readInteger(record.lines, "line count is not a whole number", 0),
     hash: readString(record, "hash"),
     fanIn: readInteger(record.fanIn, "fan-in is not a whole number", 0),
     fanOut: readInteger(record.fanOut, "fan-out is not a whole number", 0),
+  }
+}
+
+function readRoute(value: unknown): Route {
+  const record = asRecord(value, "route")
+  const pattern = readString(record, "pattern")
+  if (!pattern.startsWith("/")) invalid(`route pattern does not start with /: ${pattern}`)
+  return {
+    method: readString(record, "method"),
+    pattern,
+    file: readPath(record.file, "route file is not inside the repository"),
+    line: readInteger(record.line, "route line is not a whole number", 1),
   }
 }
 

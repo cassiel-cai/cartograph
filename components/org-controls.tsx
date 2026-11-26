@@ -1,7 +1,7 @@
 "use client";
 
 import { OrganizationSwitcher } from "@clerk/nextjs";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 const appearance = {
   variables: {
@@ -12,7 +12,17 @@ const appearance = {
 const POPOVER = ".cl-organizationSwitcherPopoverRootBox";
 const TRIGGER = ".cl-organizationSwitcherTrigger";
 
+const subscribeNothing = () => () => {};
+
 export function OrgControls() {
+  // Clerk renders nothing on the server, but it can already be loaded in the
+  // browser when React hydrates, which adds a host element the server HTML
+  // lacks. Holding the switcher back until mount keeps both first renders equal.
+  const mounted = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
   useEffect(() => {
     function onClick(event: MouseEvent) {
       const target = event.target;
@@ -51,6 +61,8 @@ export function OrgControls() {
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
   }, []);
+
+  if (!mounted) return null;
 
   return (
     <OrganizationSwitcher
