@@ -1,14 +1,15 @@
+import { AnalysisProgress } from "@/components/analysis-progress";
 import { AnalysesLoading, DashboardFrame } from "@/components/dashboard-frame";
 import { LocaleProvider } from "@/components/locale-provider";
-import { MapCanvas } from "@/components/map-canvas";
 import { Shell } from "@/components/shell";
+import { analysisPath } from "@/lib/analysis-path";
+import { getAnalysis } from "@/lib/analyses";
 import { getLocale } from "@/lib/locale-server";
-import { assertParseResult } from "@/parser/load";
-import preview from "@/data/preview.json";
 import { auth } from "@clerk/nextjs/server";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 
-export default function PreviewPage() {
+export default function Page({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense
       fallback={
@@ -17,29 +18,32 @@ export default function PreviewPage() {
         </div>
       }
     >
-      <Preview />
+      <Progress params={params} />
     </Suspense>
   );
 }
 
-async function Preview() {
+async function Progress({ params }: { params: Promise<{ id: string }> }) {
   const { orgId, orgSlug } = await auth.protect();
-
   if (!orgId) {
     throw new Error(
       "Signed in with no active organization. The session token should already carry one.",
     );
   }
 
-  const locale = await getLocale();
+  const { id: raw } = await params;
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id < 1) notFound();
+
+  const [locale, loaded] = await Promise.all([getLocale(), getAnalysis(id)]);
+  if (!loaded.analysis) notFound();
+  if (loaded.analysis.state === "complete") redirect(analysisPath(id, loaded.analysis.state));
 
   return (
     <LocaleProvider locale={locale}>
       <Shell organization={{ id: orgId, slug: orgSlug ?? null }}>
         <DashboardFrame serverOrgId={orgId}>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <MapCanvas result={assertParseResult(preview)} />
-          </div>
+          <AnalysisProgress analysis={loaded.analysis} now={loaded.now} />
         </DashboardFrame>
       </Shell>
     </LocaleProvider>

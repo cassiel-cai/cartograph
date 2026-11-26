@@ -1,15 +1,22 @@
 "use client";
 
 import { useLocale } from "@/components/locale-provider";
-import { fileCategories } from "@/lib/map/categories";
+import type { RailItem } from "@/lib/map/rail";
 import { messagesFor } from "@/lib/messages";
 import { useState } from "react";
 
-export function CategoryRail({ files }: { files: readonly { path: string }[] }) {
-  const categories = fileCategories(files);
+export function CategoryRail({
+  items,
+  selected,
+  onSelect,
+}: {
+  items: readonly RailItem[];
+  selected: string | null;
+  onSelect: (key: string) => void;
+}) {
   const copy = messagesFor(useLocale());
   const [open, setOpen] = useState(true);
-  const total = categories.reduce((sum, category) => sum + category.count, 0);
+  const total = items.reduce((sum, category) => sum + category.count, 0);
 
   return (
     <div className="py-1">
@@ -24,24 +31,35 @@ export function CategoryRail({ files }: { files: readonly { path: string }[] }) 
       </button>
       {open ? (
         <ul>
-          {categories.map((category) => (
-            <li
-              key={category.extension}
-              className="flex items-center gap-2 px-2 py-0.5"
-            >
-              <span
-                className="size-2 shrink-0"
-                style={{ background: category.color }}
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1 font-mono text-[12px]">
-                {category.extension}
-              </span>
-              <span className="font-mono text-[12px] text-muted tabular-nums">
-                {category.count}
-              </span>
-            </li>
-          ))}
+          {items.map((category) => {
+            const active = selected === category.key;
+            return (
+              <li key={category.key}>
+                <button
+                  type="button"
+                  className={`flex w-full items-center gap-2 px-2 py-0.5 text-left ${active ? "bg-accent/15" : ""}`}
+                  aria-pressed={active}
+                  onClick={() => onSelect(category.key)}
+                >
+                  {category.color ? (
+                    <span
+                      className="size-2 shrink-0"
+                      style={{ background: category.color }}
+                      aria-hidden
+                    />
+                  ) : null}
+                  <span
+                    className={`min-w-0 flex-1 font-mono text-[12px] ${active ? "text-accent" : ""}`}
+                  >
+                    {category.label}
+                  </span>
+                  <span className="font-mono text-[12px] text-muted tabular-nums">
+                    {category.count}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>

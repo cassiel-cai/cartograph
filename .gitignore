@@ -42,3 +42,6 @@ next-env.d.ts
 
 # emitted by the parse command
 /parser/dist
+
+# emitted by the analyse command
+/dist-pipeline

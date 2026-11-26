@@ -1,9 +1,13 @@
 "use client";
 
+import { CoverageBanner } from "@/components/coverage-banner";
 import { CategoryRail } from "@/components/category-rail";
 import { DetailPane } from "@/components/detail-pane";
 import { DirectionEdge } from "@/components/direction-edge";
 import { MapShell } from "@/components/map-shell";
+import { routeKey, RoutesTable } from "@/components/routes-table";
+import { useLocale } from "@/components/locale-provider";
+import { messagesFor } from "@/lib/messages";
 import {
   ListScrollContext,
   MapHoverContext,
@@ -11,13 +15,15 @@ import {
   type ModuleFlowNode,
   type ModuleNodeData,
 } from "@/components/module-node";
+import { inRailCategory, railItems } from "@/lib/map/rail";
 import { buildMap, type MapEdge, type MapNode } from "@/lib/map/present";
 import {
-  brightFiles,
-  edgeIsLit,
+  edgeInView,
+  shownFiles,
   type MapHighlight,
   type MapSelection,
 } from "@/lib/map/selection";
+import { GENERIC_ADAPTER } from "@/parser/taxonomy";
 import type { ParseResult } from "@/parser/types";
 import {
   ReactFlow,
@@ -30,7 +36,7 @@ import {
   type Edge,
   type NodeMouseHandler,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "@xyflow/react/dist/style.css";
 
 const nodeTypes = { module: ModuleNode };
@@ -47,6 +53,10 @@ export function MapCanvas({ result }: { result: ParseResult }) {
 function MapView({ result }: { result: ParseResult }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [selection, setSelection] = useState<MapSelection>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const copy = messagesFor(useLocale());
+  const [view, setView] = useState<"map" | "routes">("map");
+  const [routeKeySelected, setRouteKeySelected] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<MapHighlight>(null);
   const [zoomLabel, setZoomLabel] = useState<string | null>(null);
   const zoomHide = useRef(0);
@@ -159,13 +169,22 @@ function MapView({ result }: { result: ParseResult }) {
     [getZoom, openIds],
   );
 
+  const categoryFiles = useMemo(() => {
+    if (!category) return null;
+    return new Set(
+      result.files
+        .filter((file) => inRailCategory(result.adapter, file, category))
+        .map((file) => file.path),
+    );
+  }, [category, result.adapter, result.files]);
+  const rail = useMemo(() => railItems(result.adapter, result.files), [result.adapter, result.files]);
   const derivedNodes = useMemo(
-    () => toFlowNodes(model.nodes, selection, highlight, model.links),
-    [model, selection, highlight],
+    () => toFlowNodes(model.nodes, selection, highlight, model.links, categoryFiles),
+    [model, selection, highlight, categoryFiles],
   );
   const derivedEdges = useMemo(
-    () => toFlowEdges(model.edges, selection, model.nodes, model.links),
-    [model, selection],
+    () => toFlowEdges(model.edges, selection, model.nodes, model.links, categoryFiles),
+    [model, selection, categoryFiles],
   );
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(derivedNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(derivedEdges);
@@ -177,6 +196,9 @@ function MapView({ result }: { result: ParseResult }) {
   useEffect(() => {
     setFlowEdges(derivedEdges);
   }, [derivedEdges, setFlowEdges]);
+
+  const selectedRoute =
+    result.routes.find((route) => routeKey(route) === routeKeySelected) ?? null;
 
   const onNodeClick: NodeMouseHandler<ModuleFlowNode> = (event, node) => {
     const target = event.target;
@@ -200,10 +222,44 @@ function MapView({ result }: { result: ParseResult }) {
   return (
     <ListScrollContext.Provider value={onListScroll}>
     <MapHoverContext.Provider value={setHighlight}>
+      <CoverageBanner result={result} />
       <MapShell
-        rail={<CategoryRail files={result.files} />}
+        rail={
+          <CategoryRail
+            items={rail}
+            selected={category}
+            onSelect={(key) => setCategory((current) => (current === key ? null : key))}
+          />
+        }
+        tabs={
+          <div role="tablist" className="flex shrink-0 items-center gap-4 border-b border-border px-4 text-[13px]">
+            <ViewTab active={view === "map"} onSelect={() => setView("map")}>
+              {copy.viewMap}
+            </ViewTab>
+            <ViewTab active={view === "routes"} onSelect={() => setView("routes")}>
+              {copy.routes}
+              {result.adapter === GENERIC_ADAPTER ? null : (
+                <span className="ml-1.5 text-muted tabular-nums">{result.routes.length}</span>
+              )}
+            </ViewTab>
+          </div>
+        }
         canvas={
-          <div className="absolute inset-0">
+          <>
+          {view === "routes" ? (
+            <div className="absolute inset-0 z-10 overflow-y-auto bg-background">
+              <RoutesTable
+                routes={result.routes}
+                adapter={result.adapter}
+                selectedKey={routeKeySelected}
+                onSelect={(route) => {
+                  const key = routeKey(route);
+                  setRouteKeySelected((current) => (current === key ? null : key));
+                }}
+              />
+            </div>
+          ) : null}
+          <div className="absolute inset-0" inert={view === "routes"}>
             <ReactFlow
               nodes={flowNodes}
               edges={flowEdges}
@@ -239,15 +295,20 @@ function MapView({ result }: { result: ParseResult }) {
               style={{ background: "transparent" }}
             />
           </div>
+          </>
         }
         zoom={zoomLabel}
         detail={
           <DetailPane
             result={result}
+            route={view === "routes" ? selectedRoute : null}
             selection={selection}
             highlight={highlight}
             nodes={model.nodes}
-            onSelectFile={(path) => setSelection({ kind: "file", path })}
+            onSelectFile={(path) => {
+              setRouteKeySelected(null);
+              setSelection({ kind: "file", path });
+            }}
             onHoverPath={(path) =>
               setHighlight(path ? { kind: "file", path } : null)
             }
@@ -264,8 +325,9 @@ function toFlowNodes(
   selection: MapSelection,
   highlight: MapHighlight,
   links: readonly { from: string; to: string }[],
+  category: ReadonlySet<string> | null,
 ): ModuleFlowNode[] {
-  const bright = brightFiles(selection, nodes, links);
+  const bright = shownFiles(selection, category, nodes, links);
   return nodes.map((node) => {
     const nodeBright = bright === null || node.files.some((file) => bright.has(file));
     const nodeHovered =
@@ -280,6 +342,7 @@ function toFlowNodes(
       dimmed: !nodeBright,
       selected: selection?.kind === "node" && selection.id === node.id,
       hovered: nodeHovered,
+      matched: category === null ? null : node.files.filter((file) => category.has(file)).length,
       rows: node.rows.map((row) => ({
         path: row.path,
         label: row.label,
@@ -322,10 +385,12 @@ function toFlowEdges(
   selection: MapSelection,
   nodes: readonly MapNode[],
   links: readonly { from: string; to: string }[],
+  category: ReadonlySet<string> | null,
 ): Edge[] {
-  const bright = brightFiles(selection, nodes, links);
+  const bright = shownFiles(selection, category, nodes, links);
   return edges.map((edge) => {
-    const lit = edgeIsLit(edge, selection, bright);
+    const lit = edgeInView(edge, selection, bright, category);
+    const colored = lit && (selection !== null || category !== null);
     return {
       id: edge.id,
       source: edge.source,
@@ -333,10 +398,33 @@ function toFlowEdges(
       sourceHandle: edge.sourceHandle,
       targetHandle: edge.targetHandle,
       type: "direction",
-      data: { colored: selection !== null && lit },
+      zIndex: colored ? 1 : 0,
+      data: { colored },
       style: {
         opacity: lit ? 1 : 0.08,
       },
     };
   });
+}
+
+function ViewTab({
+  active,
+  onSelect,
+  children,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onSelect}
+      className={`-mb-px border-b-2 py-2 ${active ? "border-accent text-foreground" : "border-transparent text-muted"}`}
+    >
+      {children}
+    </button>
+  );
 }

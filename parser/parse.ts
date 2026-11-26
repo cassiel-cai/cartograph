@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto"
 import fs from "node:fs"
-import { Project } from "ts-morph"
+import { Project, type SourceFile } from "ts-morph"
 import ts from "typescript"
 
-import { noFramework, type FrameworkAdapter } from "./adapter"
+import { noFramework, type AdapterFile, type FrameworkAdapter } from "./adapter"
 import { computeDegrees, dedupeEdges } from "./graph"
 import { readImports, type SeenImport } from "./imports"
 import { assertParseResult } from "./load"
@@ -14,11 +14,13 @@ import {
   type LocateContext,
   type Location,
 } from "./resolve"
-import type {
-  Edge,
+import {
+  PARSE_RESULT_VERSION,
+  type Edge,
   ImportRecord,
   ParseCounts,
   ParseResult,
+  Route,
   SkippedFile,
 } from "./types"
 import { walk } from "./walk"
@@ -70,6 +72,7 @@ export function parseRepository(
   const failures = new Map<string, string>()
   const meta = new Map<string, { hash: string; lines: number }>()
   const imports: ImportRecord[] = []
+  const sources = new Map<string, SourceFile>()
 
   function consider(filePath: string): void {
     const current = status.get(filePath)
@@ -88,7 +91,9 @@ export function parseRepository(
 
     let seen: SeenImport[]
     try {
-      seen = readImports(project.addSourceFileAtPath(absolute))
+      const source = project.addSourceFileAtPath(absolute)
+      seen = readImports(source)
+      sources.set(filePath, source)
     } catch (error) {
       fail(filePath, `unreadable: ${messageOf(error)}`)
       return
@@ -237,14 +242,25 @@ export function parseRepository(
   const edges = dedupeEdges(rawEdges).sort(compareEdges)
   const parsedPaths = [...meta.keys()].sort()
   const degrees = computeDegrees(parsedPaths, edges)
+  const adapterFiles: AdapterFile[] = parsedPaths.map((filePath) => {
+    const source = sources.get(filePath)
+    if (!source) throw new Error(`Missing syntax tree: ${filePath}`)
+    return { path: filePath, source }
+  })
+  const roles = new Map(
+    adapterFiles.map((file) => [file.path, adapter.roleOf(file)] as const),
+  )
+  const routes = adapter.routes(adapterFiles).sort(compareRoutes)
   const files = parsedPaths.map((filePath) => {
     const info = meta.get(filePath)
     const degree = degrees.get(filePath)
-    if (!info || !degree) throw new Error(`Missing parsed file: ${filePath}`)
+    const role = roles.get(filePath)
+    if (!info || !degree || !role) throw new Error(`Missing parsed file: ${filePath}`)
     return {
       path: filePath,
       folder: folderOf(filePath),
       module: moduleOf(filePath),
+      role,
       lines: info.lines,
       hash: info.hash,
       fanIn: degree.fanIn,
@@ -259,7 +275,7 @@ export function parseRepository(
 
   const counts = countResult(files, skipped, edges, imports)
   return assertParseResult({
-    version: 1,
+    version: PARSE_RESULT_VERSION,
     root,
     adapter: adapter.name,
     hashAlgorithm: "sha256",
@@ -268,6 +284,7 @@ export function parseRepository(
     excludedDirectories,
     edges,
     imports,
+    routes,
     counts,
   })
 }
@@ -318,6 +335,15 @@ function compareEdges(left: Edge, right: Edge): number {
     left.kind.localeCompare(right.kind) ||
     left.specifier.localeCompare(right.specifier) ||
     Number(left.typeOnly) - Number(right.typeOnly)
+  )
+}
+
+function compareRoutes(left: Route, right: Route): number {
+  return (
+    left.pattern.localeCompare(right.pattern) ||
+    left.method.localeCompare(right.method) ||
+    left.file.localeCompare(right.file) ||
+    left.line - right.line
   )
 }
 

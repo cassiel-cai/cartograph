@@ -41,11 +41,52 @@ export function brightFiles(
   return bright;
 }
 
+// A category keeps every file on screen and dims the rest. Combined with a
+// selection, a file stays bright only when both want it bright.
+export function shownFiles(
+  selection: MapSelection,
+  category: ReadonlySet<string> | null,
+  nodes: readonly MapNode[],
+  links: readonly { from: string; to: string }[],
+): ReadonlySet<string> | null {
+  const selected = brightFiles(selection, nodes, links);
+  if (category === null) return selected;
+  if (selected === null) return category;
+  const both = new Set<string>();
+  for (const path of selected) {
+    if (category.has(path)) both.add(path);
+  }
+  return both;
+}
+
+export function edgeInView(
+  edge: Pick<MapEdge, "from" | "to">,
+  selection: MapSelection,
+  shown: ReadonlySet<string> | null,
+  category: ReadonlySet<string> | null,
+): boolean {
+  if (shown === null) return true;
+  if (selection) {
+    if (!edgeIsLit(edge, selection, shown)) return false;
+    if (category === null) return true;
+    return edgeTouches(edge, category);
+  }
+  // Either end. Both ends would hide the imports that leave the category.
+  return category !== null && edgeTouches(edge, category);
+}
+
+function edgeTouches(
+  edge: Pick<MapEdge, "from" | "to">,
+  files: ReadonlySet<string>,
+): boolean {
+  return files.has(edge.from) || files.has(edge.to);
+}
+
 // File selection lights only its own edges. Node selection lights any edge touching the neighbourhood.
 export function edgeIsLit(
   edge: Pick<MapEdge, "from" | "to">,
   selection: MapSelection,
-  bright: Set<string> | null,
+  bright: ReadonlySet<string> | null,
 ): boolean {
   if (bright === null) return true;
   if (selection?.kind === "file") {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale } from "@/components/locale-provider";
+import { SupabaseSession } from "@/components/supabase-session";
 import { enUS, zhCN } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { ReactNode } from "react";
@@ -28,7 +29,7 @@ export function AppClerkProvider({ children }: { children: ReactNode }) {
       afterSignOutUrl="/sign-in"
       appearance={appearance}
     >
-      {children}
+      <SupabaseSession>{children}</SupabaseSession>
     </ClerkProvider>
   );
 }

@@ -1,10 +1,17 @@
 "use client";
 
+import { useAnalysisChannels } from "@/components/analysis-channel";
+import { AnalysisForm } from "@/components/analysis-form";
 import { useLocale } from "@/components/locale-provider";
+import { PathText } from "@/components/path-text";
 import { TeamName } from "@/components/team-name";
+import { analysisPath } from "@/lib/analysis-path";
 import type { Analysis } from "@/lib/analyses";
 import { formatAgo } from "@/lib/ago";
 import { messagesFor } from "@/lib/messages";
+import { STALE_AFTER_MS, isStale, isUnfinished } from "@/lib/stale";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const STATE_ORDER = ["parsing", "queued", "complete", "failed"] as const;
 
@@ -18,21 +25,30 @@ export function AnalysisList({
   teamFallback: string;
 }) {
   const copy = messagesFor(useLocale());
-  const summary = summarize(analyses);
+  const openIds = analyses
+    .filter((analysis) => isUnfinished(analysis.state))
+    .map((analysis) => analysis.id);
+  const { updates, errors } = useAnalysisChannels(openIds);
+  const clock = useClock(now, analyses, updates);
+  const shown = analyses.map((analysis) => {
+    const live = updates.get(analysis.id);
+    const state = live?.stage ?? analysis.state;
+    const detail = live ? live.message : analysis.detail;
+    const stale = isStale(state, analysis.startedAt, clock, live?.movedAt ?? null);
+    return { analysis, state, detail, stale, error: errors.get(analysis.id) ?? null };
+  });
+  const summary = summarize(shown.map((row) => ({ ...row.analysis, state: row.stale ? "stale" : row.state })));
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 px-4 py-3">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-[14px] font-medium">
-            <TeamName fallback={teamFallback} />
-          </h1>
-          <p className="text-[13px] text-muted">
-            {copy.analysisCount(analyses.length)}
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2">
+        <h1 className="text-[14px] font-medium">
+          <TeamName fallback={teamFallback} />
+        </h1>
+        <p className="text-[13px] text-muted">{copy.analysisCount(analyses.length)}</p>
+        <AnalysisForm />
         {summary.length > 0 ? (
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
+          <ul className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
             {summary.map((item) => (
               <li key={item.state} className="flex items-center gap-1.5">
                 <StateIcon state={item.state} />
@@ -52,40 +68,45 @@ export function AnalysisList({
         <div className="overflow-x-auto">
           <table className="w-full min-w-180 border-collapse text-left">
             <thead>
-              <tr className="border-y border-border text-[12px] text-muted">
+              <tr className="border-b border-border text-[12px] text-muted">
                 <th className="px-4 py-2 font-normal">{copy.repository}</th>
                 <th className="w-36 px-3 py-2 font-normal">{copy.state}</th>
                 <th className="w-28 px-3 py-2 font-normal">{copy.commit}</th>
-                <th className="w-28 px-3 py-2 font-normal">{copy.started}</th>
-                <th className="w-28 px-3 py-2 font-normal">{copy.finished}</th>
+                <th className="w-28 px-3 py-2 text-right font-normal">{copy.started}</th>
+                <th className="w-28 px-4 py-2 text-right font-normal">{copy.finished}</th>
               </tr>
             </thead>
             <tbody>
-              {analyses.map((analysis) => (
-                <tr key={analysis.id} className="border-b border-border">
+              {shown.map(({ analysis, state, detail, stale, error }) => (
+                <tr key={analysis.id} className="border-b border-border hover:bg-surface">
                   <td className="px-4 py-2.5 align-top">
                     <div className="font-mono text-[13px]">
-                      {repositoryName(analysis.repositoryUrl)}
+                      <Link href={analysisPath(analysis.id, state)} className="text-foreground hover:underline">
+                        <PathText text={repositoryName(analysis.repositoryUrl)} />
+                      </Link>
                     </div>
-                    {analysis.detail ? (
-                      <div className="mt-0.5 text-[12px] text-muted">
-                        {analysis.detail}
+                    {detail ? (
+                      <div className="mt-0.5 text-[12px] text-muted">{detail}</div>
+                    ) : null}
+                    {error ? (
+                      <div className="mt-0.5 text-[12px] text-foreground">
+                        {copy.progressChannel} {error}
                       </div>
                     ) : null}
                   </td>
                   <td className="px-3 py-2.5 align-top">
                     <span className="flex items-center gap-1.5 text-[13px]">
-                      <StateIcon state={analysis.state} />
-                      {copy.stateLabel(analysis.state)}
+                      <StateIcon state={stale ? "stale" : state} />
+                      {copy.stateLabel(stale ? "stale" : state)}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 align-top font-mono text-[13px]">
-                    <Cell value={analysis.commitSha} />
+                    <Cell value={analysis.commitSha?.slice(0, 7) ?? null} />
                   </td>
-                  <td className="px-3 py-2.5 align-top text-[13px]">
+                  <td className="px-3 py-2.5 text-right align-top text-[13px]">
                     <Ago iso={analysis.startedAt} now={now} />
                   </td>
-                  <td className="px-3 py-2.5 align-top text-[13px]">
+                  <td className="px-4 py-2.5 text-right align-top text-[13px]">
                     <Ago iso={analysis.finishedAt} now={now} />
                   </td>
                 </tr>
@@ -96,6 +117,40 @@ export function AnalysisList({
       )}
     </div>
   );
+}
+
+function useClock(
+  now: number,
+  analyses: readonly Analysis[],
+  updates: ReadonlyMap<number, { movedAt: number; stage: string }>,
+): number {
+  const [clock, setClock] = useState(now);
+  const wait = soonestStaleWait(analyses, updates, clock);
+  useEffect(() => {
+    if (wait === null) return;
+    const id = window.setTimeout(() => setClock(Date.now()), wait);
+    return () => window.clearTimeout(id);
+  }, [wait]);
+  return clock;
+}
+
+function soonestStaleWait(
+  analyses: readonly Analysis[],
+  updates: ReadonlyMap<number, { movedAt: number; stage: string }>,
+  now: number,
+): number | null {
+  let soonest: number | null = null;
+  for (const analysis of analyses) {
+    const live = updates.get(analysis.id);
+    const state = live?.stage ?? analysis.state;
+    if (!isUnfinished(state)) continue;
+    const basis = live?.movedAt ?? (analysis.startedAt ? Date.parse(analysis.startedAt) : Number.NaN);
+    if (Number.isNaN(basis)) continue;
+    const remaining = basis + STALE_AFTER_MS - now;
+    if (remaining <= 0) continue;
+    if (soonest === null || remaining < soonest) soonest = remaining;
+  }
+  return soonest;
 }
 
 function Cell({ value }: { value: string | null }) {

@@ -1,6 +1,7 @@
 // The file the parse command writes. Later phases read this shape.
 
-export const PARSE_RESULT_VERSION = 1
+// 2: files carry a role and the result carries routes.
+export const PARSE_RESULT_VERSION = 2
 
 export const EDGE_KINDS = ["import", "reexport", "dynamic"] as const
 
@@ -19,10 +20,18 @@ export type ParsedFile = {
   path: string
   folder: string
   module: string
+  role: string
   lines: number
   hash: string
   fanIn: number
   fanOut: number
+}
+
+export type Route = {
+  method: string
+  pattern: string
+  file: string
+  line: number
 }
 
 export type SkippedFile = {
@@ -80,5 +89,6 @@ export type ParseResult = {
   excludedDirectories: ExcludedDirectory[]
   edges: Edge[]
   imports: ImportRecord[]
+  routes: Route[]
   counts: ParseCounts
 }
