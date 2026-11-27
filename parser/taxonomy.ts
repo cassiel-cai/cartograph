@@ -24,6 +24,10 @@ export const ROLE = {
   interceptors: "Interceptors",
   pipes: "Pipes",
   filters: "Filters",
+  routes: "Routes",
+  models: "Models",
+  views: "Views",
+  config: "Config",
 } as const
 
 const ROLES_BY_ADAPTER: Record<string, readonly string[]> = {
@@ -52,6 +56,16 @@ const ROLES_BY_ADAPTER: Record<string, readonly string[]> = {
     ROLE.other,
   ],
   react: [ROLE.components, ROLE.hooks, ROLE.other],
+  express: [
+    ROLE.routes,
+    ROLE.controllers,
+    ROLE.middleware,
+    ROLE.models,
+    ROLE.services,
+    ROLE.views,
+    ROLE.config,
+    ROLE.other,
+  ],
 }
 
 export function rolesFor(adapter: string): readonly string[] | null {
